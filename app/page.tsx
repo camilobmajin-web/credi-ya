@@ -97,7 +97,20 @@ style: "currency",
 currency: "EUR",
 }).format(Number(n || 0));
 }
+function calcularMoraVisual(fechaLimite: string, saldo: number) {
+  if (!saldo || saldo <= 0) return 0;
 
+  const hoy = new Date();
+  const vencimiento = new Date(fechaLimite);
+
+  const diff = Math.floor(
+    (hoy.getTime() - vencimiento.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  const dias = diff > 0 ? diff : 0;
+
+  return Number((saldo * 0.01 * dias).toFixed(2)); // 1% diario
+}
 function getNivel(score: number): Cliente["nivel"] {
 if (score >= 20) return "VIP";
 if (score >= 10) return "BUENO";
@@ -685,6 +698,7 @@ cuotasPendientes?: number;
 estadoDeuda?: string;
 negocio?: string;
 logo?: string;
+mora?: number;
 }) {
 const doc = new jsPDF();
 const negocio = params.negocio || "CREDI YA";
@@ -719,6 +733,7 @@ line("Telefono", params.clienteTelefono || "-");
 line("Fecha", params.fecha || "-");
 line("Monto pagado", formatEUR(params.monto || 0));
 line("Metodo", params.metodo || "-");
+line("mora", formatEUR(params.mora || 0));
 line("Saldo restante", formatEUR(params.saldoRestante || 0));
 line("Cuota", params.numeroCuota ? String(params.numeroCuota) : "-");
 line("Cuotas pendientes", String(params.cuotasPendientes || 0));
@@ -892,12 +907,13 @@ fecha,
 monto: montoPagoNum,
 metodo: pagoMetodo,
 nota: pagoNota,
-saldoRestante: deudaPagada ? 0 : nuevoSaldo,
+saldoRestante: deudaPagada ? 0 : nuevoSaldo + calcularMoraVisual(cuotaBase.fecha, nuevoSaldo),
 numeroCuota: cuotaBase.numero,
 cuotasPendientes: deudaPagada ? 0 : cuotasPendientes,
 estadoDeuda,
 negocio: business.negocio || "CREDI YA",
 logo: business.logoBase64 || "",
+mora: calcularMoraVisual(cuotaBase.fecha, nuevoSaldo),
 });
 
 alert(deudaPagada ? "Pago registrado. Deuda pagada." : "Pago registrado correctamente");
@@ -1572,6 +1588,11 @@ color: MUTED,
 <span>Total: {formatEUR(c.monto)}</span>
 <span>Pagado: {formatEUR(c.pagado)}</span>
 <span>Restante: {formatEUR(c.restante)}</span>
+{calcularMoraVisual(c.fecha, c.restante) > 0 && (
+  <span style={{ color: "red", fontWeight: "bold" }}>
+    Mora: {formatEUR(calcularMoraVisual(c.fecha, c.restante))}
+  </span>
+)}
 <span style={{ color: badgeColor(c.estado), fontWeight: 700 }}>{c.estado}</span>
 </div>
 ))}
