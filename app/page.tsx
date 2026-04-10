@@ -257,6 +257,7 @@ export default function App() {
   const [busquedaClientes, setBusquedaClientes] = useState("");
   const [busquedaPrestamo, setBusquedaPrestamo] = useState("");
   const [busquedaCobros, setBusquedaCobros] = useState("");
+  const [soloCobrosHoy, setSoloCobrosHoy] = useState(false);
   const [busquedaPagos, setBusquedaPagos] = useState("");
 
   const [mostrarFormCliente, setMostrarFormCliente] = useState(false);
@@ -851,22 +852,41 @@ export default function App() {
     });
   }, [prestamosConEstadoReal, clientes, busquedaPrestamo]);
 
-  const cobrosHoyList = useMemo(() => {
-    const hoy = todayISO();
+  const cobrosHoyCount = useMemo(() => {
+  const hoy = todayISO();
+  return cuotas.filter((c) => c.fecha === hoy && c.estado !== "PAGADA").length;
+}, [cuotas]);
 
-    return cuotas
-      .filter((c) => c.fecha === hoy && c.estado !== "PAGADA")
-      .map((c) => {
-        const prestamo = prestamosConEstadoReal.find((p) => p.id === c.prestamo_id);
-        const cliente = clientes.find((cl) => cl.id === prestamo?.client_id);
-        return { cuota: c, prestamo, cliente };
-      })
-      .filter(({ cliente }) => {
-        const q = busquedaCobros.toLowerCase().trim();
-        const texto = `${cliente?.nombre || ""} ${cliente?.telefono || ""} ${cliente?.ruta || ""}`.toLowerCase();
-        return texto.includes(q);
-      });
-  }, [cuotas, prestamosConEstadoReal, clientes, busquedaCobros]);
+const cobrosFiltrados = useMemo(() => {
+  const hoy = todayISO();
+  const q = busquedaCobros.toLowerCase().trim();
+
+  return cuotas
+    .filter((c) => c.estado !== "PAGADA")
+    .map((c) => {
+      const prestamo = prestamosConEstadoReal.find((p) => p.id === c.prestamo_id);
+      const cliente = clientes.find((cl) => cl.id === prestamo?.client_id);
+
+      return { cuota: c, prestamo, cliente };
+    })
+    .filter(({ cuota, cliente }) => {
+      const texto = `${cliente?.nombre || ""} ${cliente?.telefono || ""} ${cliente?.ruta || ""} ${cuota.fecha}`.toLowerCase();
+      const coincideBusqueda = texto.includes(q);
+      const coincideHoy = soloCobrosHoy ? cuota.fecha === hoy : true;
+      return coincideBusqueda && coincideHoy;
+    })
+    .sort((a, b) => {
+      const hoyTime = new Date(hoy).getTime();
+      const aTime = new Date(a.cuota.fecha).getTime();
+      const bTime = new Date(b.cuota.fecha).getTime();
+
+      const aVencida = aTime < hoyTime ? 0 : aTime === hoyTime ? 1 : 2;
+      const bVencida = bTime < hoyTime ? 0 : bTime === hoyTime ? 1 : 2;
+
+      if (aVencida !== bVencida) return aVencida - bVencida;
+      return aTime - bTime;
+    });
+}, [cuotas, prestamosConEstadoReal, clientes, busquedaCobros, soloCobrosHoy]);
 
   const pagosFiltrados = useMemo(() => {
     return pagos.filter((p) => {
@@ -892,7 +912,7 @@ export default function App() {
     [pagos]
   );
 
-  const cobrosHoy = cobrosHoyList.length;
+  const cobrosHoy = cobrosHoyCount;
 
   const clientesVip = clientes.filter((c) => c.nivel === "VIP").length;
   const clientesBuenos = clientes.filter((c) => c.nivel === "BUENO").length;
@@ -1490,120 +1510,182 @@ export default function App() {
         )}
 
         {screen === "cobros" && (
-          <div style={{ ...cardStyle(), display: "grid", gap: 12 }}>
-            <SectionTitle title="Cobros de hoy" subtitle="Cobros programados para hoy con buscador" />
+  <div style={{ ...cardStyle(), display: "grid", gap: 12 }}>
+    <SectionTitle
+      title="Cobros y abonos"
+      subtitle="Busca cualquier cliente y registra cobros, atrasos o abonos a capital"
+    />
 
-            <input
-              placeholder="Buscar cliente, teléfono o ruta"
-              value={busquedaCobros}
-              onChange={(e) => setBusquedaCobros(e.target.value)}
-              style={inputStyle()}
-            />
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <button
+        style={buttonStyle(!soloCobrosHoy)}
+        onClick={() => setSoloCobrosHoy(false)}
+      >
+        Todos los pendientes
+      </button>
 
-            {cuotaSeleccionada && (
-              <div style={{ ...cardStyle(), display: "grid", gap: 12, boxShadow: "none" }}>
-                <h3 style={{ margin: 0 }}>Registrar pago</h3>
-                <p style={{ margin: 0, color: TEXT_SECONDARY }}>
-                  Cuota {cuotaSeleccionada.numero} · Restante {formatEUR(cuotaSeleccionada.restante)}
-                </p>
+      <button
+        style={buttonStyle(soloCobrosHoy)}
+        onClick={() => setSoloCobrosHoy(true)}
+      >
+        Solo hoy
+      </button>
+    </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
-                  <input
-                    placeholder="Monto pagado"
-                    value={pagoMonto}
-                    onChange={(e) => setPagoMonto(e.target.value)}
-                    style={inputStyle()}
-                  />
+    <input
+      placeholder="Buscar cliente, teléfono, ruta o fecha"
+      value={busquedaCobros}
+      onChange={(e) => setBusquedaCobros(e.target.value)}
+      style={inputStyle()}
+    />
 
-                  <select value={pagoMetodo} onChange={(e) => setPagoMetodo(e.target.value)} style={inputStyle()}>
-                    <option value="EFECTIVO">EFECTIVO</option>
-                    <option value="BIZUM">BIZUM</option>
-                    <option value="TRANSFERENCIA">TRANSFERENCIA</option>
-                  </select>
+    {cuotaSeleccionada && (
+      <div style={{ ...cardStyle(), display: "grid", gap: 12, boxShadow: "none" }}>
+        <h3 style={{ margin: 0, color: TEXT_PRIMARY }}>Registrar pago o abono</h3>
+        <p style={{ margin: 0, color: TEXT_SECONDARY }}>
+          Cuota {cuotaSeleccionada.numero} · Restante {formatEUR(cuotaSeleccionada.restante)}
+        </p>
+        <p style={{ margin: 0, color: TEXT_SECONDARY }}>
+          El sistema repartirá el pago automáticamente sobre las cuotas pendientes del préstamo.
+        </p>
 
-                  <input type="date" value={pagoFecha} onChange={(e) => setPagoFecha(e.target.value)} style={inputStyle()} />
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 10,
+          }}
+        >
+          <input
+            placeholder="Monto pagado"
+            value={pagoMonto}
+            onChange={(e) => setPagoMonto(e.target.value)}
+            style={inputStyle()}
+          />
 
-                  <input
-                    placeholder="Nota"
-                    value={pagoNota}
-                    onChange={(e) => setPagoNota(e.target.value)}
-                    style={inputStyle()}
-                  />
-                </div>
+          <select
+            value={pagoMetodo}
+            onChange={(e) => setPagoMetodo(e.target.value)}
+            style={inputStyle()}
+          >
+            <option value="EFECTIVO">EFECTIVO</option>
+            <option value="BIZUM">BIZUM</option>
+            <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+          </select>
 
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button style={buttonStyle(true)} onClick={registrarPagoVisual}>
-                    Confirmar pago
-                  </button>
-                  <button
-                    style={buttonStyle()}
-                    onClick={() => {
-                      setCuotaSeleccionadaId(null);
-                      setPagoMonto("");
-                      setPagoMetodo("EFECTIVO");
-                      setPagoFecha(todayISO());
-                      setPagoNota("");
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            )}
+          <input
+            type="date"
+            value={pagoFecha}
+            onChange={(e) => setPagoFecha(e.target.value)}
+            style={inputStyle()}
+          />
 
-            {cargandoCuotas ? (
-              <p style={{ color: TEXT_SECONDARY }}>Cargando cobros...</p>
-            ) : cobrosHoyList.length === 0 ? (
-              <p style={{ color: TEXT_SECONDARY }}>Hoy no hay cobros programados.</p>
-            ) : (
-              cobrosHoyList.map(({ cuota, cliente, prestamo }) => (
-                <div
-                  key={cuota.id}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: 14,
-                    border: `1px solid ${BORDER_COLOR}`,
-                    borderRadius: 16,
-                    flexWrap: "wrap",
-                    background: "#fff",
-                  }}
-                >
-                  <div style={{ display: "grid", gap: 4 }}>
-                    <strong style={{ fontSize: 18, color: TEXT_PRIMARY }}>{cliente?.nombre || "Cliente"}</strong>
-                    <p style={{ margin: 0, color: TEXT_SECONDARY }}>{cliente?.telefono || ""}</p>
-                    <p style={{ margin: 0, color: TEXT_SECONDARY }}>Ruta: {cliente?.ruta || "-"}</p>
-                    <p style={{ margin: 0, color: TEXT_SECONDARY }}>
-                      Cuota {cuota.numero} · Total {formatEUR(cuota.monto)} · Restante {formatEUR(cuota.restante)}
-                    </p>
-                  </div>
+          <input
+            placeholder="Nota"
+            value={pagoNota}
+            onChange={(e) => setPagoNota(e.target.value)}
+            style={inputStyle()}
+          />
+        </div>
 
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <span style={badgeStyle(colorEstadoPrestamo(prestamo?.estado || "COBRAR HOY"))}>
-                      {prestamo?.estado || "COBRAR HOY"}
-                    </span>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button style={buttonStyle(true)} onClick={registrarPagoVisual}>
+            Confirmar pago
+          </button>
 
-                    <button
-                      style={buttonStyle(true)}
-                      onClick={() => {
-                        setCuotaSeleccionadaId(cuota.id);
-                        setPagoMonto(String(cuota.restante));
-                        setPagoMetodo("EFECTIVO");
-                        setPagoFecha(todayISO());
-                        setPagoNota("");
-                      }}
-                    >
-                      Cobrar
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
+          <button
+            style={buttonStyle()}
+            onClick={() => {
+              setCuotaSeleccionadaId(null);
+              setPagoMonto("");
+              setPagoMetodo("EFECTIVO");
+              setPagoFecha(todayISO());
+              setPagoNota("");
+            }}
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    )}
+
+    {cargandoCuotas ? (
+      <p style={{ color: TEXT_SECONDARY }}>Cargando cobros...</p>
+    ) : cobrosFiltrados.length === 0 ? (
+      <p style={{ color: TEXT_SECONDARY }}>
+        No hay cuotas pendientes con ese filtro.
+      </p>
+    ) : (
+      cobrosFiltrados.map(({ cuota, cliente, prestamo }) => {
+        const hoy = todayISO();
+        const esVencida = cuota.fecha < hoy;
+        const esHoy = cuota.fecha === hoy;
+
+        return (
+          <div
+            key={cuota.id}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              padding: 14,
+              border: `1px solid ${BORDER_COLOR}`,
+              borderRadius: 16,
+              flexWrap: "wrap",
+              background: "#fff",
+            }}
+          >
+            <div style={{ display: "grid", gap: 4 }}>
+              <strong style={{ fontSize: 18, color: TEXT_PRIMARY }}>
+                {cliente?.nombre || "Cliente"}
+              </strong>
+
+              <p style={{ margin: 0, color: TEXT_SECONDARY }}>
+                {cliente?.telefono || ""}
+              </p>
+
+              <p style={{ margin: 0, color: TEXT_SECONDARY }}>
+                Ruta: {cliente?.ruta || "-"}
+              </p>
+
+              <p style={{ margin: 0, color: TEXT_SECONDARY }}>
+                Cuota {cuota.numero} · Fecha {cuota.fecha}
+              </p>
+
+              <p style={{ margin: 0, color: TEXT_SECONDARY }}>
+                Total {formatEUR(cuota.monto)} · Pagado {formatEUR(cuota.pagado)} · Restante {formatEUR(cuota.restante)}
+              </p>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <span
+                style={badgeStyle(
+                  esVencida ? "#dc2626" : esHoy ? "#d97706" : colorEstadoPrestamo(prestamo?.estado || "AL DÍA")
+                )}
+              >
+                {esVencida ? "VENCIDA" : esHoy ? "COBRAR HOY" : "PENDIENTE"}
+              </span>
+
+              <button
+                style={buttonStyle(true)}
+                onClick={() => {
+                  setCuotaSeleccionadaId(cuota.id);
+                  setPagoMonto(String(cuota.restante));
+                  setPagoMetodo("EFECTIVO");
+                  setPagoFecha(todayISO());
+                  setPagoNota("");
+                }}
+              >
+                Abonar / Cobrar
+              </button>
+            </div>
           </div>
-        )}
-
+        );
+      })
+    )}
+  </div>
+)}
         {screen === "pagos" && (
           <div style={{ ...cardStyle(), display: "grid", gap: 12 }}>
             <SectionTitle title="Pagos" subtitle="Historial con buscador" />
