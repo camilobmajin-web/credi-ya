@@ -80,7 +80,7 @@ const BG = "#f3f4f6";
 const CARD_BG = "#ffffff";
 const BORDER = "#cbd5e1";
 const TEXT = "#0f172a";
-const MUTED = "#475569";
+const MUTED = "#374151";
 const PRIMARY = "#0f172a";
 const SUCCESS = "#15803d";
 const WARNING = "#d97706";
@@ -121,6 +121,7 @@ border: `1px solid ${BORDER}`,
 borderRadius: 20,
 padding: 16,
 boxShadow: "0 6px 18px rgba(15,23,42,0.05)",
+color: TEXT,
 };
 }
 
@@ -1377,7 +1378,7 @@ Volver
 </div>
 </div>
 
-<div style={{ ...cardStyle(), boxShadow: "none", display: "grid", gap: 6 }}>
+<div style={{ ...cardStyle(), boxShadow: "none", display: "grid", gap: 6, color: TEXT,}}>
 <p style={{ margin: 0 }}><strong>Nombre:</strong> {clienteSeleccionado.nombre}</p>
 <p style={{ margin: 0 }}><strong>Teléfono:</strong> {clienteSeleccionado.telefono || "-"}</p>
 <p style={{ margin: 0 }}><strong>Documento:</strong> {clienteSeleccionado.documento || "No registrado"}</p>
@@ -1397,7 +1398,7 @@ Volver
 ) : (
 <div style={{ display: "grid", gap: 10 }}>
 {prestamosCliente.map((p) => (
-<div key={p.id} style={{ padding: 12, border: `1px solid ${BORDER}`, borderRadius: 14 }}>
+<div key={p.id} style={{ padding: 12, border: `1px solid ${BORDER}`, borderRadius: 14, color:TEXT,background: "#fff" }}>
 <p style={{ margin: 0 }}><strong>Monto:</strong> {formatEUR(p.monto)}</p>
 <p style={{ margin: 0 }}><strong>Cuota:</strong> {formatEUR(p.cuota)}</p>
 <p style={{ margin: 0 }}><strong>Saldo:</strong> {formatEUR(p.saldo)}</p>
@@ -1416,7 +1417,7 @@ Volver
 ) : (
 <div style={{ display: "grid", gap: 10 }}>
 {pagosCliente.map((p) => (
-<div key={p.id} style={{ padding: 12, border: `1px solid ${BORDER}`, borderRadius: 14 }}>
+<div key={p.id} style={{ padding: 12, border: `1px solid ${BORDER}`, borderRadius: 14, color: TEXT,background: "#fff", }}>
 <p style={{ margin: 0 }}><strong>Fecha:</strong> {p.fecha}</p>
 <p style={{ margin: 0 }}><strong>Monto:</strong> {formatEUR(p.monto)}</p>
 <p style={{ margin: 0 }}><strong>Método:</strong> {p.metodo}</p>
