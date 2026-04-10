@@ -8,8 +8,8 @@ type Screen =
   | "dashboard"
   | "clientes"
   | "prestamos"
-  | "pagos"
   | "cobros"
+  | "pagos"
   | "clienteDetalle";
 
 type Cliente = {
@@ -21,6 +21,7 @@ type Cliente = {
   trabajo?: string;
   referencia?: string;
   notas?: string;
+  ruta?: string;
   score: number;
   nivel: "VIP" | "BUENO" | "REGULAR" | "MOROSO";
 };
@@ -66,6 +67,14 @@ type UsuarioApp = {
   usuario: string;
   password: string;
 };
+
+const TEXT_PRIMARY = "#111827";
+const TEXT_SECONDARY = "#374151";
+const BORDER_COLOR = "#cbd5e1";
+const BG = "#f3f4f6";
+const CARD_BG = "#ffffff";
+const PRIMARY = "#0f172a";
+const DANGER = "#b91c1c";
 
 function formatEUR(n: number) {
   return new Intl.NumberFormat("es-ES", {
@@ -133,32 +142,64 @@ function colorEstadoCuota(estado: Cuota["estado"]) {
 
 function cardStyle(): CSSProperties {
   return {
-    background: "white",
-    borderRadius: 18,
+    background: CARD_BG,
+    borderRadius: 20,
     padding: 16,
-    boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-    border: "1px solid #e5e7eb",
+    boxShadow: "0 6px 20px rgba(15,23,42,0.06)",
+    border: `1px solid ${BORDER_COLOR}`,
+    color: TEXT_PRIMARY,
   };
 }
 
 function buttonStyle(primary = false): CSSProperties {
   return {
-    padding: "12px 16px",
-    borderRadius: 14,
-    border: primary ? "none" : "1px solid #d1d5db",
-    background: primary ? "#111827" : "white",
-    color: primary ? "white" : "#111827",
+    padding: "14px 18px",
+    borderRadius: 16,
+    border: primary ? "none" : `1px solid ${BORDER_COLOR}`,
+    background: primary ? PRIMARY : "white",
+    color: primary ? "white" : TEXT_PRIMARY,
     cursor: "pointer",
-    fontWeight: 600,
+    fontWeight: 700,
+    fontSize: 15,
+    minHeight: 48,
+  };
+}
+
+function dangerButtonStyle(): CSSProperties {
+  return {
+    ...buttonStyle(),
+    border: "1px solid #fecaca",
+    color: DANGER,
+    background: "#fff",
   };
 }
 
 function inputStyle(): CSSProperties {
   return {
-    padding: 12,
-    borderRadius: 12,
-    border: "1px solid #d1d5db",
+    padding: 14,
+    borderRadius: 14,
+    border: `1px solid ${BORDER_COLOR}`,
     width: "100%",
+    color: TEXT_PRIMARY,
+    background: "white",
+    fontSize: 16,
+    minHeight: 48,
+    outline: "none",
+  };
+}
+
+function badgeStyle(textColor: string): CSSProperties {
+  return {
+    background: "#f8fafc",
+    color: textColor,
+    padding: "8px 12px",
+    borderRadius: 999,
+    fontWeight: 700,
+    fontSize: 14,
+    display: "inline-flex",
+    alignItems: "center",
+    width: "fit-content",
+    border: `1px solid ${BORDER_COLOR}`,
   };
 }
 
@@ -211,8 +252,38 @@ export default function App() {
   const [cargandoPagos, setCargandoPagos] = useState(false);
   const [cargandoCuotas, setCargandoCuotas] = useState(false);
 
-  const [busquedaPrestamo, setBusquedaPrestamo] = useState("");
   const [clienteSeleccionadoId, setClienteSeleccionadoId] = useState<string | null>(null);
+
+  const [busquedaClientes, setBusquedaClientes] = useState("");
+  const [busquedaPrestamo, setBusquedaPrestamo] = useState("");
+  const [busquedaCobros, setBusquedaCobros] = useState("");
+  const [busquedaPagos, setBusquedaPagos] = useState("");
+
+  const [mostrarFormCliente, setMostrarFormCliente] = useState(false);
+  const [editandoClienteId, setEditandoClienteId] = useState<string | null>(null);
+
+  const [clienteNombre, setClienteNombre] = useState("");
+  const [clienteTelefono, setClienteTelefono] = useState("");
+  const [clienteDocumento, setClienteDocumento] = useState("");
+  const [clienteDireccion, setClienteDireccion] = useState("");
+  const [clienteTrabajo, setClienteTrabajo] = useState("");
+  const [clienteReferencia, setClienteReferencia] = useState("");
+  const [clienteNotas, setClienteNotas] = useState("");
+  const [clienteRuta, setClienteRuta] = useState("");
+
+  const [mostrarFormPrestamo, setMostrarFormPrestamo] = useState(false);
+  const [prestamoClienteId, setPrestamoClienteId] = useState("");
+  const [prestamoMonto, setPrestamoMonto] = useState("");
+  const [prestamoInteres, setPrestamoInteres] = useState("0.15");
+  const [prestamoFrecuencia, setPrestamoFrecuencia] = useState<Prestamo["frecuencia"]>("DIARIO");
+  const [prestamoCuotas, setPrestamoCuotas] = useState("20");
+  const [prestamoFechaInicio, setPrestamoFechaInicio] = useState(todayISO());
+
+  const [cuotaSeleccionadaId, setCuotaSeleccionadaId] = useState<string | null>(null);
+  const [pagoMonto, setPagoMonto] = useState("");
+  const [pagoMetodo, setPagoMetodo] = useState("EFECTIVO");
+  const [pagoFecha, setPagoFecha] = useState(todayISO());
+  const [pagoNota, setPagoNota] = useState("");
 
   async function cargarUsuarios() {
     const { data, error } = await supabase
@@ -286,6 +357,7 @@ export default function App() {
       trabajo: c.trabajo || "",
       referencia: c.referencia || "",
       notas: c.notas || "",
+      ruta: c.ruta || "",
       score: c.score || 0,
       nivel: getNivel(c.score || 0),
     }));
@@ -407,122 +479,137 @@ export default function App() {
     recargarTodo();
   }, []);
 
-  async function crearCliente() {
-    const nombre = prompt("Nombre del cliente");
-    if (!nombre) return;
+  function limpiarFormularioCliente() {
+    setEditandoClienteId(null);
+    setClienteNombre("");
+    setClienteTelefono("");
+    setClienteDocumento("");
+    setClienteDireccion("");
+    setClienteTrabajo("");
+    setClienteReferencia("");
+    setClienteNotas("");
+    setClienteRuta("");
+  }
 
-    const telefono = prompt("Teléfono") || "";
-    const documento = prompt("Número de documento") || "";
-    const direccion = prompt("Dirección") || "";
-    const trabajo = prompt("Trabajo") || "";
-    const referencia = prompt("Referencia") || "";
-    const notas = prompt("Notas") || "";
+  function empezarCrearCliente() {
+    limpiarFormularioCliente();
+    setMostrarFormCliente(true);
+  }
 
-    const { error } = await supabase.from("clientes").insert([
-      {
-        nombre,
-        telefono,
-        documento,
-        direccion,
-        trabajo,
-        referencia,
-        notas,
-        score: 0,
-      },
-    ]);
+  function empezarEditarCliente(cliente: Cliente) {
+    setEditandoClienteId(cliente.id);
+    setClienteNombre(cliente.nombre || "");
+    setClienteTelefono(cliente.telefono || "");
+    setClienteDocumento(cliente.documento || "");
+    setClienteDireccion(cliente.direccion || "");
+    setClienteTrabajo(cliente.trabajo || "");
+    setClienteReferencia(cliente.referencia || "");
+    setClienteNotas(cliente.notas || "");
+    setClienteRuta(cliente.ruta || "");
+    setMostrarFormCliente(true);
+    setScreen("clientes");
+  }
 
-    if (error) {
-      alert("Error: " + error.message);
+  async function guardarCliente() {
+    if (!clienteNombre.trim()) {
+      alert("El nombre es obligatorio");
       return;
     }
 
-    alert("Cliente creado");
+    const payload = {
+      nombre: clienteNombre,
+      telefono: clienteTelefono,
+      documento: clienteDocumento,
+      direccion: clienteDireccion,
+      trabajo: clienteTrabajo,
+      referencia: clienteReferencia,
+      notas: clienteNotas,
+      ruta: clienteRuta,
+    };
+
+    if (editandoClienteId) {
+      const { error } = await supabase
+        .from("clientes")
+        .update(payload)
+        .eq("id", editandoClienteId);
+
+      if (error) {
+        alert("Error actualizando cliente: " + error.message);
+        return;
+      }
+
+      alert("Cliente actualizado");
+    } else {
+      const { error } = await supabase
+        .from("clientes")
+        .insert([{ ...payload, score: 0 }]);
+
+      if (error) {
+        alert("Error creando cliente: " + error.message);
+        return;
+      }
+
+      alert("Cliente creado");
+    }
+
+    limpiarFormularioCliente();
+    setMostrarFormCliente(false);
     await cargarClientes();
   }
 
-  async function editarCliente(cliente: Cliente) {
-    const nombre = prompt("Nombre", cliente.nombre ?? "") ?? cliente.nombre ?? "";
-    const telefono = prompt("Teléfono", cliente.telefono ?? "") ?? cliente.telefono ?? "";
-    const documento = prompt("Documento", cliente.documento ?? "") ?? cliente.documento ?? "";
-    const direccion = prompt("Dirección", cliente.direccion ?? "") ?? cliente.direccion ?? "";
-    const trabajo = prompt("Trabajo", cliente.trabajo ?? "") ?? cliente.trabajo ?? "";
-    const referencia = prompt("Referencia", cliente.referencia ?? "") ?? cliente.referencia ?? "";
-    const notas = prompt("Notas", cliente.notas ?? "") ?? cliente.notas ?? "";
+  async function borrarCliente(cliente: Cliente) {
+    const confirmado = confirm(
+      `¿Seguro que quieres borrar a ${cliente.nombre}?\n\nEsto eliminará también sus préstamos, cuotas y pagos relacionados.`
+    );
+
+    if (!confirmado) return;
 
     const { error } = await supabase
       .from("clientes")
-      .update({
-        nombre,
-        telefono,
-        documento,
-        direccion,
-        trabajo,
-        referencia,
-        notas,
-      })
+      .delete()
       .eq("id", cliente.id);
 
     if (error) {
-      alert("Error actualizando cliente: " + error.message);
+      alert("Error borrando cliente: " + error.message);
       return;
     }
 
-    alert("Cliente actualizado");
-    await cargarClientes();
+    if (clienteSeleccionadoId === cliente.id) {
+      setClienteSeleccionadoId(null);
+      setScreen("clientes");
+    }
+
+    alert("Cliente borrado correctamente");
+    await recargarTodo();
   }
 
-  async function crearPrestamo() {
-    if (clientes.length === 0) {
-      alert("Primero crea un cliente");
+  function limpiarFormularioPrestamo() {
+    setPrestamoClienteId("");
+    setPrestamoMonto("");
+    setPrestamoInteres("0.15");
+    setPrestamoFrecuencia("DIARIO");
+    setPrestamoCuotas("20");
+    setPrestamoFechaInicio(todayISO());
+  }
+
+  async function guardarPrestamo() {
+    if (!prestamoClienteId) {
+      alert("Selecciona un cliente");
       return;
     }
 
-    const lista = clientes
-      .map((c, i) => `${i + 1}. ${c.nombre} - ${c.telefono}`)
-      .join("\n");
+    const monto = Number(prestamoMonto || 0);
+    const interes = Number(prestamoInteres || 0);
+    const cuotasCount = Number(prestamoCuotas || 0);
+    const fecha_inicio = prestamoFechaInicio || todayISO();
 
-    const seleccion = prompt("Selecciona el número del cliente:\n\n" + lista);
-    if (!seleccion) return;
-
-    const index = Number(seleccion) - 1;
-    const cliente = clientes[index];
-
-    if (!cliente) {
-      alert("Cliente no válido");
+    if (!monto || !interes || !cuotasCount) {
+      alert("Completa monto, interés y cuotas");
       return;
     }
-
-    const monto = Number(prompt("Monto prestado", "100") || 0);
-    if (!monto) return;
-
-    const frecuenciaInput =
-      (prompt("Frecuencia: DIARIO / SEMANAL / MENSUAL", "DIARIO") || "DIARIO")
-        .toUpperCase()
-        .trim() as Prestamo["frecuencia"];
-
-    const frecuencia: Prestamo["frecuencia"] =
-      frecuenciaInput === "SEMANAL" || frecuenciaInput === "MENSUAL"
-        ? frecuenciaInput
-        : "DIARIO";
-
-    const interes = Number(prompt("Interés (ejemplo 0.15 para 15%)", "0.15") || 0);
-    if (Number.isNaN(interes)) return;
-
-    const cuotasDefault =
-      frecuencia === "DIARIO" ? 20 : frecuencia === "SEMANAL" ? 4 : 1;
-
-    const cuotasCount = Number(
-      prompt(
-        frecuencia === "MENSUAL" ? "Meses" : "Número de cuotas",
-        String(cuotasDefault)
-      ) || cuotasDefault
-    );
-
-    const fecha_inicio =
-      prompt("Fecha inicio (YYYY-MM-DD)", todayISO()) || todayISO();
 
     let total = 0;
-    if (frecuencia === "MENSUAL") total = monto * (1 + interes * cuotasCount);
+    if (prestamoFrecuencia === "MENSUAL") total = monto * (1 + interes * cuotasCount);
     else total = monto * (1 + interes);
 
     const cuotaBase = total / cuotasCount;
@@ -533,15 +620,15 @@ export default function App() {
       .from("prestamos")
       .insert([
         {
-          client_id: cliente.id,
+          client_id: prestamoClienteId,
           monto,
           interes,
-          frecuencia,
+          frecuencia: prestamoFrecuencia,
           cuotas: cuotasCount,
           total,
           cuota: cuotaRedondeada,
           saldo,
-          estado: frecuencia === "DIARIO" ? "COBRAR HOY" : "AL DÍA",
+          estado: prestamoFrecuencia === "DIARIO" ? "COBRAR HOY" : "AL DÍA",
           fecha_inicio,
         },
       ])
@@ -549,16 +636,16 @@ export default function App() {
       .single();
 
     if (error || !prestamoCreado) {
-      alert("Error: " + (error?.message || "No se pudo crear préstamo"));
+      alert("Error creando préstamo: " + (error?.message || ""));
       return;
     }
 
     const cuotasInsert = Array.from({ length: cuotasCount }).map((_, i) => {
       let fecha = fecha_inicio;
 
-      if (frecuencia === "DIARIO") fecha = addBusinessDays(fecha_inicio, i);
-      if (frecuencia === "SEMANAL") fecha = addDays(fecha_inicio, (i + 1) * 7);
-      if (frecuencia === "MENSUAL") fecha = addMonths(fecha_inicio, i + 1);
+      if (prestamoFrecuencia === "DIARIO") fecha = addBusinessDays(fecha_inicio, i);
+      if (prestamoFrecuencia === "SEMANAL") fecha = addDays(fecha_inicio, (i + 1) * 7);
+      if (prestamoFrecuencia === "MENSUAL") fecha = addMonths(fecha_inicio, i + 1);
 
       return {
         prestamo_id: prestamoCreado.id,
@@ -578,43 +665,31 @@ export default function App() {
       return;
     }
 
-    alert("Préstamo y cuotas creados");
+    alert("Préstamo creado");
+    limpiarFormularioPrestamo();
+    setMostrarFormPrestamo(false);
     await recargarTodo();
   }
 
-  async function registrarPago() {
-    const pendientes = cuotas.filter((c) => c.estado !== "PAGADA");
-
-    if (pendientes.length === 0) {
-      alert("No hay cuotas pendientes");
+  async function registrarPagoVisual() {
+    if (!cuotaSeleccionadaId) {
+      alert("Selecciona una cuota");
       return;
     }
 
-    const lista = pendientes
-      .map((c, i) => {
-        const prestamo = prestamos.find((p) => p.id === c.prestamo_id);
-        const cliente = clientes.find((x) => x.id === prestamo?.client_id);
-        return `${i + 1}. ${cliente?.nombre || "Cliente"} - Cuota ${c.numero} - ${formatEUR(c.monto)} - Restante ${formatEUR(c.restante || c.monto)} - ${c.fecha} - ${c.estado}`;
-      })
-      .join("\n");
-
-    const seleccion = prompt("Selecciona una cuota del préstamo a cobrar:\n\n" + lista);
-    if (!seleccion) return;
-
-    const index = Number(seleccion) - 1;
-    const cuotaBase = pendientes[index];
-
+    const cuotaBase = cuotas.find((c) => c.id === cuotaSeleccionadaId);
     if (!cuotaBase) {
       alert("Cuota no válida");
       return;
     }
 
-    const montoPago = Number(prompt("Monto pagado", String(cuotaBase.restante || cuotaBase.monto)) || 0);
-    if (!montoPago) return;
+    const montoPago = Number(pagoMonto || 0);
+    if (!montoPago) {
+      alert("Introduce un monto válido");
+      return;
+    }
 
-    const metodo = prompt("Método: EFECTIVO / BIZUM / TRANSFERENCIA", "EFECTIVO") || "EFECTIVO";
-    const fecha = prompt("Fecha (YYYY-MM-DD)", todayISO()) || todayISO();
-    const nota = prompt("Nota", "") || "";
+    const fecha = pagoFecha || todayISO();
     const puntual = fecha <= cuotaBase.fecha;
 
     const prestamo = prestamos.find((p) => p.id === cuotaBase.prestamo_id);
@@ -668,9 +743,9 @@ export default function App() {
         prestamo_id: prestamo.id,
         fecha,
         monto: montoPago,
-        metodo,
+        metodo: pagoMetodo,
         puntual,
-        nota,
+        nota: pagoNota,
       },
     ]);
 
@@ -734,6 +809,11 @@ export default function App() {
     }
 
     alert("Pago registrado correctamente");
+    setCuotaSeleccionadaId(null);
+    setPagoMonto("");
+    setPagoMetodo("EFECTIVO");
+    setPagoFecha(todayISO());
+    setPagoNota("");
     await recargarTodo();
   }
 
@@ -755,10 +835,18 @@ export default function App() {
     });
   }, [prestamos, cuotas]);
 
+  const clientesFiltrados = useMemo(() => {
+    const q = busquedaClientes.toLowerCase().trim();
+    return clientes.filter((c) => {
+      const texto = `${c.nombre} ${c.telefono} ${c.documento || ""} ${c.ruta || ""}`.toLowerCase();
+      return texto.includes(q);
+    });
+  }, [clientes, busquedaClientes]);
+
   const prestamosFiltrados = useMemo(() => {
     return prestamosConEstadoReal.filter((p) => {
       const cliente = clientes.find((c) => c.id === p.client_id);
-      const texto = `${cliente?.nombre || ""} ${cliente?.telefono || ""}`.toLowerCase();
+      const texto = `${cliente?.nombre || ""} ${cliente?.telefono || ""} ${cliente?.ruta || ""}`.toLowerCase();
       return texto.includes(busquedaPrestamo.toLowerCase());
     });
   }, [prestamosConEstadoReal, clientes, busquedaPrestamo]);
@@ -772,8 +860,22 @@ export default function App() {
         const prestamo = prestamosConEstadoReal.find((p) => p.id === c.prestamo_id);
         const cliente = clientes.find((cl) => cl.id === prestamo?.client_id);
         return { cuota: c, prestamo, cliente };
+      })
+      .filter(({ cliente }) => {
+        const q = busquedaCobros.toLowerCase().trim();
+        const texto = `${cliente?.nombre || ""} ${cliente?.telefono || ""} ${cliente?.ruta || ""}`.toLowerCase();
+        return texto.includes(q);
       });
-  }, [cuotas, prestamosConEstadoReal, clientes]);
+  }, [cuotas, prestamosConEstadoReal, clientes, busquedaCobros]);
+
+  const pagosFiltrados = useMemo(() => {
+    return pagos.filter((p) => {
+      const prestamo = prestamos.find((x) => x.id === p.prestamo_id);
+      const cliente = clientes.find((c) => c.id === prestamo?.client_id);
+      const texto = `${cliente?.nombre || ""} ${cliente?.telefono || ""} ${p.metodo || ""} ${p.fecha || ""}`.toLowerCase();
+      return texto.includes(busquedaPagos.toLowerCase());
+    });
+  }, [pagos, prestamos, clientes, busquedaPagos]);
 
   const totalPrestado = useMemo(
     () => prestamos.reduce((acc, p) => acc + p.monto, 0),
@@ -804,12 +906,40 @@ export default function App() {
     return prestamo?.client_id === clienteSeleccionadoId;
   });
 
+  const cuotaSeleccionada = cuotas.find((c) => c.id === cuotaSeleccionadaId) || null;
+
+  function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
+    return (
+      <div style={{ display: "grid", gap: 4 }}>
+        <h2 style={{ margin: 0, fontSize: 28, color: TEXT_PRIMARY }}>{title}</h2>
+        {subtitle ? <p style={{ margin: 0, color: TEXT_SECONDARY, fontSize: 15 }}>{subtitle}</p> : null}
+      </div>
+    );
+  }
+
+  function MetricCard({ label, value }: { label: string; value: string | number }) {
+    return (
+      <div style={cardStyle()}>
+        <p style={{ color: TEXT_SECONDARY, margin: 0, fontSize: 15 }}>{label}</p>
+        <h2 style={{ color: TEXT_PRIMARY, margin: "10px 0 0", fontSize: 28 }}>{value}</h2>
+      </div>
+    );
+  }
+
+  function NavButton({ value, label }: { value: Screen; label: string }) {
+    return (
+      <button style={buttonStyle(screen === value)} onClick={() => setScreen(value)}>
+        {label}
+      </button>
+    );
+  }
+
   if (screen === "login") {
     return (
       <div
         style={{
           minHeight: "100vh",
-          background: "#f3f4f6",
+          background: BG,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -817,12 +947,7 @@ export default function App() {
         }}
       >
         <div style={{ ...cardStyle(), width: "100%", maxWidth: 420, display: "grid", gap: 16 }}>
-          <div>
-            <h1 style={{ fontSize: 32, marginBottom: 8 }}>CREDI YA</h1>
-            <p style={{ color: "#6b7280", marginBottom: 0 }}>
-              Control de préstamos y cobros
-            </p>
-          </div>
+          <SectionTitle title="CREDI YA" subtitle="Control profesional de préstamos y cobros" />
 
           <input
             placeholder="Usuario"
@@ -846,7 +971,7 @@ export default function App() {
             Crear usuario
           </button>
 
-          <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>
+          <p style={{ margin: 0, color: TEXT_SECONDARY, fontSize: 14 }}>
             Usuarios creados: {usuarios.length}
           </p>
         </div>
@@ -855,51 +980,43 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f9fafb", padding: 20 }}>
-      <div style={{ maxWidth: 1150, margin: "0 auto", display: "grid", gap: 20 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <h1 style={{ margin: 0 }}>CREDI YA</h1>
-            <p style={{ color: "#6b7280", marginTop: 6 }}>
-              Usuario: {usuarioActual?.nombre || usuarioActual?.usuario || "-"}
-            </p>
-          </div>
+    <div style={{ minHeight: "100vh", background: BG, padding: 16 }}>
+      <div style={{ maxWidth: 1180, margin: "0 auto", display: "grid", gap: 16 }}>
+        <div style={{ ...cardStyle(), display: "grid", gap: 16 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "grid", gap: 6 }}>
+              <h1 style={{ margin: 0, color: TEXT_PRIMARY, fontSize: 34 }}>CREDI YA</h1>
+              <p style={{ margin: 0, color: TEXT_SECONDARY, fontSize: 16 }}>
+                Usuario: {usuarioActual?.nombre || usuarioActual?.usuario || "-"}
+              </p>
+            </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button style={buttonStyle(screen === "dashboard")} onClick={() => setScreen("dashboard")}>
-              Dashboard
-            </button>
-            <button style={buttonStyle(screen === "clientes")} onClick={() => setScreen("clientes")}>
-              Clientes
-            </button>
-            <button style={buttonStyle(screen === "prestamos")} onClick={() => setScreen("prestamos")}>
-              Préstamos
-            </button>
-            <button style={buttonStyle(screen === "cobros")} onClick={() => setScreen("cobros")}>
-              Cobros hoy
-            </button>
-            <button style={buttonStyle(screen === "pagos")} onClick={() => setScreen("pagos")}>
-              Pagos
-            </button>
-            <button
-              style={buttonStyle()}
-              onClick={() => {
-                setUsuarioActual(null);
-                setUsuarioLogin("");
-                setPasswordLogin("");
-                setScreen("login");
-              }}
-            >
-              Salir
-            </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <NavButton value="dashboard" label="Dashboard" />
+              <NavButton value="clientes" label="Clientes" />
+              <NavButton value="prestamos" label="Préstamos" />
+              <NavButton value="cobros" label="Cobros" />
+              <NavButton value="pagos" label="Pagos" />
+              <button
+                style={buttonStyle()}
+                onClick={() => {
+                  setUsuarioActual(null);
+                  setUsuarioLogin("");
+                  setPasswordLogin("");
+                  setScreen("login");
+                }}
+              >
+                Salir
+              </button>
+            </div>
           </div>
         </div>
 
@@ -908,26 +1025,14 @@ export default function App() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
                 gap: 16,
               }}
             >
-              <div style={cardStyle()}>
-                <p style={{ color: "#6b7280", margin: 0 }}>Total prestado</p>
-                <h2>{formatEUR(totalPrestado)}</h2>
-              </div>
-              <div style={cardStyle()}>
-                <p style={{ color: "#6b7280", margin: 0 }}>Total cobrado</p>
-                <h2>{formatEUR(totalCobrado)}</h2>
-              </div>
-              <div style={cardStyle()}>
-                <p style={{ color: "#6b7280", margin: 0 }}>Saldo pendiente</p>
-                <h2>{formatEUR(totalPendiente)}</h2>
-              </div>
-              <div style={cardStyle()}>
-                <p style={{ color: "#6b7280", margin: 0 }}>Cobros hoy</p>
-                <h2>{cobrosHoy}</h2>
-              </div>
+              <MetricCard label="Total prestado" value={formatEUR(totalPrestado)} />
+              <MetricCard label="Total cobrado" value={formatEUR(totalCobrado)} />
+              <MetricCard label="Saldo pendiente" value={formatEUR(totalPendiente)} />
+              <MetricCard label="Cobros hoy" value={cobrosHoy} />
             </div>
 
             <div
@@ -937,34 +1042,34 @@ export default function App() {
                 gap: 16,
               }}
             >
-              <div style={cardStyle()}>
-                <p style={{ color: "#6b7280", margin: 0 }}>VIP</p>
-                <h2>{clientesVip}</h2>
-              </div>
-              <div style={cardStyle()}>
-                <p style={{ color: "#6b7280", margin: 0 }}>Buenos</p>
-                <h2>{clientesBuenos}</h2>
-              </div>
-              <div style={cardStyle()}>
-                <p style={{ color: "#6b7280", margin: 0 }}>Regulares</p>
-                <h2>{clientesRegulares}</h2>
-              </div>
-              <div style={cardStyle()}>
-                <p style={{ color: "#6b7280", margin: 0 }}>Morosos</p>
-                <h2>{clientesMorosos}</h2>
-              </div>
+              <MetricCard label="VIP" value={clientesVip} />
+              <MetricCard label="Buenos" value={clientesBuenos} />
+              <MetricCard label="Regulares" value={clientesRegulares} />
+              <MetricCard label="Morosos" value={clientesMorosos} />
             </div>
 
-            <div style={cardStyle()}>
-              <h3>Acciones rápidas</h3>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <button style={buttonStyle(true)} onClick={crearCliente}>
+            <div style={{ ...cardStyle(), display: "grid", gap: 12 }}>
+              <SectionTitle title="Acciones rápidas" subtitle="Trabaja más rápido desde aquí" />
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button style={buttonStyle(true)} onClick={empezarCrearCliente}>
                   Nuevo cliente
                 </button>
-                <button style={buttonStyle()} onClick={crearPrestamo}>
+                <button
+                  style={buttonStyle()}
+                  onClick={() => {
+                    limpiarFormularioPrestamo();
+                    setMostrarFormPrestamo(true);
+                    setScreen("prestamos");
+                  }}
+                >
                   Nuevo préstamo
                 </button>
-                <button style={buttonStyle()} onClick={registrarPago}>
+                <button
+                  style={buttonStyle()}
+                  onClick={() => {
+                    setScreen("cobros");
+                  }}
+                >
                   Registrar pago
                 </button>
                 <button style={buttonStyle()} onClick={recargarTodo}>
@@ -986,18 +1091,59 @@ export default function App() {
                 flexWrap: "wrap",
               }}
             >
-              <h3 style={{ margin: 0 }}>Clientes</h3>
-              <button style={buttonStyle(true)} onClick={crearCliente}>
+              <SectionTitle title="Clientes" subtitle="Gestión, riesgo y rutas" />
+              <button style={buttonStyle(true)} onClick={empezarCrearCliente}>
                 Nuevo cliente
               </button>
             </div>
 
+            <input
+              placeholder="Buscar por nombre, teléfono, documento o ruta"
+              value={busquedaClientes}
+              onChange={(e) => setBusquedaClientes(e.target.value)}
+              style={inputStyle()}
+            />
+
+            {mostrarFormCliente && (
+              <div style={{ ...cardStyle(), display: "grid", gap: 12, boxShadow: "none" }}>
+                <h3 style={{ margin: 0, color: TEXT_PRIMARY }}>
+                  {editandoClienteId ? "Editar cliente" : "Nuevo cliente"}
+                </h3>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+                  <input placeholder="Nombre" value={clienteNombre} onChange={(e) => setClienteNombre(e.target.value)} style={inputStyle()} />
+                  <input placeholder="Teléfono" value={clienteTelefono} onChange={(e) => setClienteTelefono(e.target.value)} style={inputStyle()} />
+                  <input placeholder="Documento" value={clienteDocumento} onChange={(e) => setClienteDocumento(e.target.value)} style={inputStyle()} />
+                  <input placeholder="Ruta de cobro" value={clienteRuta} onChange={(e) => setClienteRuta(e.target.value)} style={inputStyle()} />
+                  <input placeholder="Dirección" value={clienteDireccion} onChange={(e) => setClienteDireccion(e.target.value)} style={inputStyle()} />
+                  <input placeholder="Trabajo" value={clienteTrabajo} onChange={(e) => setClienteTrabajo(e.target.value)} style={inputStyle()} />
+                  <input placeholder="Referencia" value={clienteReferencia} onChange={(e) => setClienteReferencia(e.target.value)} style={inputStyle()} />
+                  <input placeholder="Notas" value={clienteNotas} onChange={(e) => setClienteNotas(e.target.value)} style={inputStyle()} />
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button style={buttonStyle(true)} onClick={guardarCliente}>
+                    Guardar
+                  </button>
+                  <button
+                    style={buttonStyle()}
+                    onClick={() => {
+                      limpiarFormularioCliente();
+                      setMostrarFormCliente(false);
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
             {cargandoClientes ? (
-              <p style={{ color: "#6b7280" }}>Cargando clientes...</p>
-            ) : clientes.length === 0 ? (
-              <p style={{ color: "#6b7280" }}>No hay clientes todavía.</p>
+              <p style={{ color: TEXT_SECONDARY }}>Cargando clientes...</p>
+            ) : clientesFiltrados.length === 0 ? (
+              <p style={{ color: TEXT_SECONDARY }}>No hay clientes todavía.</p>
             ) : (
-              clientes.map((c) => {
+              clientesFiltrados.map((c) => {
                 const recommendation = getRecommendation(c.score);
 
                 return (
@@ -1005,10 +1151,11 @@ export default function App() {
                     key={c.id}
                     style={{
                       display: "grid",
-                      gap: 10,
-                      padding: 12,
-                      border: "1px solid #e5e7eb",
-                      borderRadius: 14,
+                      gap: 12,
+                      padding: 16,
+                      border: `1px solid ${BORDER_COLOR}`,
+                      borderRadius: 18,
+                      background: "#fff",
                     }}
                   >
                     <div
@@ -1016,30 +1163,20 @@ export default function App() {
                         display: "flex",
                         justifyContent: "space-between",
                         gap: 12,
-                        alignItems: "center",
+                        alignItems: "flex-start",
                         flexWrap: "wrap",
                       }}
                     >
-                      <div>
-                        <strong>{c.nombre}</strong>
-                        <p style={{ margin: 0, color: "#6b7280" }}>Tel: {c.telefono}</p>
-                        <p style={{ margin: 0, color: "#6b7280" }}>Doc: {c.documento || "-"}</p>
-                        <p style={{ margin: 0, color: "#6b7280" }}>Score: {c.score}</p>
+                      <div style={{ display: "grid", gap: 6 }}>
+                        <strong style={{ fontSize: 20, color: TEXT_PRIMARY }}>{c.nombre}</strong>
+                        <p style={{ margin: 0, color: TEXT_SECONDARY, fontSize: 15 }}>Tel: {c.telefono}</p>
+                        <p style={{ margin: 0, color: TEXT_SECONDARY, fontSize: 15 }}>Doc: {c.documento || "-"}</p>
+                        <p style={{ margin: 0, color: TEXT_SECONDARY, fontSize: 15 }}>Ruta: {c.ruta || "-"}</p>
+                        <p style={{ margin: 0, color: TEXT_SECONDARY, fontSize: 15 }}>Score: {c.score}</p>
                       </div>
 
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <span
-                          style={{
-                            background: "#f3f4f6",
-                            color: colorNivel(c.nivel),
-                            padding: "6px 10px",
-                            borderRadius: 999,
-                            fontWeight: 700,
-                            fontSize: 12,
-                          }}
-                        >
-                          {c.nivel}
-                        </span>
+                        <span style={badgeStyle(colorNivel(c.nivel))}>{c.nivel}</span>
 
                         <button
                           style={buttonStyle()}
@@ -1051,8 +1188,12 @@ export default function App() {
                           Ficha
                         </button>
 
-                        <button style={buttonStyle()} onClick={() => editarCliente(c)}>
+                        <button style={buttonStyle()} onClick={() => empezarEditarCliente(c)}>
                           Editar
+                        </button>
+
+                        <button style={dangerButtonStyle()} onClick={() => borrarCliente(c)}>
+                          Borrar
                         </button>
                       </div>
                     </div>
@@ -1061,8 +1202,9 @@ export default function App() {
                       style={{
                         display: "grid",
                         gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                        gap: 8,
-                        fontSize: 14,
+                        gap: 10,
+                        fontSize: 15,
+                        color: TEXT_SECONDARY,
                       }}
                     >
                       <span>Acción: {recommendation.accion}</span>
@@ -1079,10 +1221,13 @@ export default function App() {
         {screen === "clienteDetalle" && clienteSeleccionado && (
           <div style={{ ...cardStyle(), display: "grid", gap: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <h3 style={{ margin: 0 }}>Ficha del cliente</h3>
+              <SectionTitle title="Ficha del cliente" subtitle="Información completa" />
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button style={buttonStyle()} onClick={() => editarCliente(clienteSeleccionado)}>
+                <button style={buttonStyle()} onClick={() => empezarEditarCliente(clienteSeleccionado)}>
                   Editar
+                </button>
+                <button style={dangerButtonStyle()} onClick={() => borrarCliente(clienteSeleccionado)}>
+                  Borrar
                 </button>
                 <button style={buttonStyle()} onClick={() => setScreen("clientes")}>
                   Volver
@@ -1090,65 +1235,72 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ ...cardStyle(), boxShadow: "none" }}>
-              <p><strong>Nombre:</strong> {clienteSeleccionado.nombre}</p>
-              <p><strong>Teléfono:</strong> {clienteSeleccionado.telefono || "-"}</p>
-              <p><strong>Documento:</strong> {clienteSeleccionado.documento || "-"}</p>
-              <p><strong>Dirección:</strong> {clienteSeleccionado.direccion || "-"}</p>
-              <p><strong>Trabajo:</strong> {clienteSeleccionado.trabajo || "-"}</p>
-              <p><strong>Referencia:</strong> {clienteSeleccionado.referencia || "-"}</p>
-              <p><strong>Notas:</strong> {clienteSeleccionado.notas || "-"}</p>
-              <p><strong>Score:</strong> {clienteSeleccionado.score}</p>
-              <p><strong>Nivel:</strong> {clienteSeleccionado.nivel}</p>
+            <div style={{ ...cardStyle(), boxShadow: "none", display: "grid", gap: 8 }}>
+              <p style={{ margin: 0 }}><strong>Nombre:</strong> {clienteSeleccionado.nombre}</p>
+              <p style={{ margin: 0 }}><strong>Teléfono:</strong> {clienteSeleccionado.telefono || "-"}</p>
+              <p style={{ margin: 0 }}><strong>Documento:</strong> {clienteSeleccionado.documento || "-"}</p>
+              <p style={{ margin: 0 }}><strong>Ruta:</strong> {clienteSeleccionado.ruta || "-"}</p>
+              <p style={{ margin: 0 }}><strong>Dirección:</strong> {clienteSeleccionado.direccion || "-"}</p>
+              <p style={{ margin: 0 }}><strong>Trabajo:</strong> {clienteSeleccionado.trabajo || "-"}</p>
+              <p style={{ margin: 0 }}><strong>Referencia:</strong> {clienteSeleccionado.referencia || "-"}</p>
+              <p style={{ margin: 0 }}><strong>Notas:</strong> {clienteSeleccionado.notas || "-"}</p>
+              <p style={{ margin: 0 }}><strong>Score:</strong> {clienteSeleccionado.score}</p>
+              <p style={{ margin: 0 }}><strong>Nivel:</strong> {clienteSeleccionado.nivel}</p>
             </div>
 
             <div style={{ ...cardStyle(), boxShadow: "none" }}>
-              <h4>Préstamos del cliente</h4>
+              <h3 style={{ marginTop: 0, color: TEXT_PRIMARY }}>Préstamos del cliente</h3>
               {prestamosCliente.length === 0 ? (
-                <p style={{ color: "#6b7280" }}>No tiene préstamos.</p>
+                <p style={{ color: TEXT_SECONDARY }}>No tiene préstamos.</p>
               ) : (
-                prestamosCliente.map((p) => (
-                  <div
-                    key={p.id}
-                    style={{
-                      padding: 12,
-                      border: "1px solid #e5e7eb",
-                      borderRadius: 12,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <p style={{ margin: 0 }}><strong>Monto:</strong> {formatEUR(p.monto)}</p>
-                    <p style={{ margin: 0 }}><strong>Cuota:</strong> {formatEUR(p.cuota)}</p>
-                    <p style={{ margin: 0 }}><strong>Saldo:</strong> {formatEUR(p.saldo)}</p>
-                    <p style={{ margin: 0 }}><strong>Frecuencia:</strong> {p.frecuencia}</p>
-                    <p style={{ margin: 0 }}><strong>Estado:</strong> {p.estado}</p>
-                  </div>
-                ))
+                <div style={{ display: "grid", gap: 10 }}>
+                  {prestamosCliente.map((p) => (
+                    <div
+                      key={p.id}
+                      style={{
+                        padding: 12,
+                        border: `1px solid ${BORDER_COLOR}`,
+                        borderRadius: 14,
+                        display: "grid",
+                        gap: 6,
+                      }}
+                    >
+                      <p style={{ margin: 0 }}><strong>Monto:</strong> {formatEUR(p.monto)}</p>
+                      <p style={{ margin: 0 }}><strong>Cuota:</strong> {formatEUR(p.cuota)}</p>
+                      <p style={{ margin: 0 }}><strong>Saldo:</strong> {formatEUR(p.saldo)}</p>
+                      <p style={{ margin: 0 }}><strong>Frecuencia:</strong> {p.frecuencia}</p>
+                      <p style={{ margin: 0 }}><strong>Estado:</strong> {p.estado}</p>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
             <div style={{ ...cardStyle(), boxShadow: "none" }}>
-              <h4>Pagos del cliente</h4>
+              <h3 style={{ marginTop: 0, color: TEXT_PRIMARY }}>Pagos del cliente</h3>
               {pagosCliente.length === 0 ? (
-                <p style={{ color: "#6b7280" }}>No tiene pagos.</p>
+                <p style={{ color: TEXT_SECONDARY }}>No tiene pagos.</p>
               ) : (
-                pagosCliente.map((p) => (
-                  <div
-                    key={p.id}
-                    style={{
-                      padding: 12,
-                      border: "1px solid #e5e7eb",
-                      borderRadius: 12,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <p style={{ margin: 0 }}><strong>Fecha:</strong> {p.fecha}</p>
-                    <p style={{ margin: 0 }}><strong>Monto:</strong> {formatEUR(p.monto)}</p>
-                    <p style={{ margin: 0 }}><strong>Método:</strong> {p.metodo}</p>
-                    <p style={{ margin: 0 }}><strong>Puntual:</strong> {p.puntual ? "Sí" : "No"}</p>
-                    <p style={{ margin: 0 }}><strong>Nota:</strong> {p.nota || "-"}</p>
-                  </div>
-                ))
+                <div style={{ display: "grid", gap: 10 }}>
+                  {pagosCliente.map((p) => (
+                    <div
+                      key={p.id}
+                      style={{
+                        padding: 12,
+                        border: `1px solid ${BORDER_COLOR}`,
+                        borderRadius: 14,
+                        display: "grid",
+                        gap: 6,
+                      }}
+                    >
+                      <p style={{ margin: 0 }}><strong>Fecha:</strong> {p.fecha}</p>
+                      <p style={{ margin: 0 }}><strong>Monto:</strong> {formatEUR(p.monto)}</p>
+                      <p style={{ margin: 0 }}><strong>Método:</strong> {p.metodo}</p>
+                      <p style={{ margin: 0 }}><strong>Puntual:</strong> {p.puntual ? "Sí" : "No"}</p>
+                      <p style={{ margin: 0 }}><strong>Nota:</strong> {p.nota || "-"}</p>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -1165,23 +1317,85 @@ export default function App() {
                 flexWrap: "wrap",
               }}
             >
-              <h3 style={{ margin: 0 }}>Préstamos</h3>
-              <button style={buttonStyle(true)} onClick={crearPrestamo}>
-                Nuevo préstamo
+              <SectionTitle title="Préstamos" subtitle="Control completo de cuotas y saldo" />
+              <button
+                style={buttonStyle(true)}
+                onClick={() => {
+                  limpiarFormularioPrestamo();
+                  setMostrarFormPrestamo((v) => !v);
+                }}
+              >
+                {mostrarFormPrestamo ? "Cerrar formulario" : "Nuevo préstamo"}
               </button>
             </div>
 
+            {mostrarFormPrestamo && (
+              <div style={{ ...cardStyle(), display: "grid", gap: 12, boxShadow: "none" }}>
+                <h3 style={{ margin: 0, color: TEXT_PRIMARY }}>Nuevo préstamo</h3>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+                  <select value={prestamoClienteId} onChange={(e) => setPrestamoClienteId(e.target.value)} style={inputStyle()}>
+                    <option value="">Selecciona cliente</option>
+                    {clientes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre} - {c.telefono}
+                      </option>
+                    ))}
+                  </select>
+
+                  <input placeholder="Monto" value={prestamoMonto} onChange={(e) => setPrestamoMonto(e.target.value)} style={inputStyle()} />
+                  <input placeholder="Interés (ej 0.15)" value={prestamoInteres} onChange={(e) => setPrestamoInteres(e.target.value)} style={inputStyle()} />
+
+                  <select value={prestamoFrecuencia} onChange={(e) => {
+                    const val = e.target.value as Prestamo["frecuencia"];
+                    setPrestamoFrecuencia(val);
+                    if (val === "DIARIO") setPrestamoCuotas("20");
+                    if (val === "SEMANAL") setPrestamoCuotas("4");
+                    if (val === "MENSUAL") setPrestamoCuotas("1");
+                  }} style={inputStyle()}>
+                    <option value="DIARIO">DIARIO</option>
+                    <option value="SEMANAL">SEMANAL</option>
+                    <option value="MENSUAL">MENSUAL</option>
+                  </select>
+
+                  <input
+                    placeholder={prestamoFrecuencia === "MENSUAL" ? "Meses" : "Número de cuotas"}
+                    value={prestamoCuotas}
+                    onChange={(e) => setPrestamoCuotas(e.target.value)}
+                    style={inputStyle()}
+                  />
+
+                  <input type="date" value={prestamoFechaInicio} onChange={(e) => setPrestamoFechaInicio(e.target.value)} style={inputStyle()} />
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button style={buttonStyle(true)} onClick={guardarPrestamo}>
+                    Guardar préstamo
+                  </button>
+                  <button
+                    style={buttonStyle()}
+                    onClick={() => {
+                      limpiarFormularioPrestamo();
+                      setMostrarFormPrestamo(false);
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
             <input
-              placeholder="Buscar por cliente o teléfono"
+              placeholder="Buscar por cliente, teléfono o ruta"
               value={busquedaPrestamo}
               onChange={(e) => setBusquedaPrestamo(e.target.value)}
               style={inputStyle()}
             />
 
             {cargandoPrestamos ? (
-              <p style={{ color: "#6b7280" }}>Cargando préstamos...</p>
+              <p style={{ color: TEXT_SECONDARY }}>Cargando préstamos...</p>
             ) : prestamosFiltrados.length === 0 ? (
-              <p style={{ color: "#6b7280" }}>No hay préstamos todavía.</p>
+              <p style={{ color: TEXT_SECONDARY }}>No hay préstamos todavía.</p>
             ) : (
               prestamosFiltrados.map((p) => {
                 const cliente = clientes.find((c) => c.id === p.client_id);
@@ -1196,19 +1410,25 @@ export default function App() {
                   <div
                     key={p.id}
                     style={{
-                      padding: 14,
-                      border: "1px solid #e5e7eb",
-                      borderRadius: 14,
+                      padding: 16,
+                      border: `1px solid ${BORDER_COLOR}`,
+                      borderRadius: 18,
                       display: "grid",
-                      gap: 10,
+                      gap: 12,
+                      background: "#fff",
                     }}
                   >
-                    <strong>{cliente?.nombre || "Cliente sin nombre"}</strong>
+                    <strong style={{ fontSize: 20, color: TEXT_PRIMARY }}>
+                      {cliente?.nombre || "Cliente sin nombre"}
+                    </strong>
+
                     <div
                       style={{
                         display: "grid",
                         gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                        gap: 8,
+                        gap: 10,
+                        color: TEXT_SECONDARY,
+                        fontSize: 15,
                       }}
                     >
                       <span>Monto: {formatEUR(p.monto)}</span>
@@ -1222,9 +1442,10 @@ export default function App() {
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                        gap: 8,
-                        fontSize: 14,
+                        gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                        gap: 10,
+                        color: TEXT_SECONDARY,
+                        fontSize: 15,
                       }}
                     >
                       <span>Pagadas: {pagadas}</span>
@@ -1233,32 +1454,21 @@ export default function App() {
                       <span>Vencidas: {vencidas}</span>
                     </div>
 
-                    <span
-                      style={{
-                        width: "fit-content",
-                        background: "#f3f4f6",
-                        color: colorEstadoPrestamo(p.estado),
-                        padding: "6px 10px",
-                        borderRadius: 999,
-                        fontWeight: 700,
-                        fontSize: 12,
-                      }}
-                    >
-                      {p.estado}
-                    </span>
+                    <span style={badgeStyle(colorEstadoPrestamo(p.estado))}>{p.estado}</span>
 
-                    <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ display: "grid", gap: 8 }}>
                       {cuotasPrestamo.map((c) => (
                         <div
                           key={c.id}
                           style={{
                             display: "grid",
-                            gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 1fr",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
                             gap: 8,
-                            padding: 8,
-                            border: "1px solid #f0f0f0",
-                            borderRadius: 10,
-                            fontSize: 14,
+                            padding: 12,
+                            border: `1px solid ${BORDER_COLOR}`,
+                            borderRadius: 14,
+                            fontSize: 15,
+                            color: TEXT_SECONDARY,
                           }}
                         >
                           <span>Cuota {c.numero}</span>
@@ -1281,12 +1491,70 @@ export default function App() {
 
         {screen === "cobros" && (
           <div style={{ ...cardStyle(), display: "grid", gap: 12 }}>
-            <h3 style={{ margin: 0 }}>Cobros de hoy</h3>
+            <SectionTitle title="Cobros de hoy" subtitle="Cobros programados para hoy con buscador" />
+
+            <input
+              placeholder="Buscar cliente, teléfono o ruta"
+              value={busquedaCobros}
+              onChange={(e) => setBusquedaCobros(e.target.value)}
+              style={inputStyle()}
+            />
+
+            {cuotaSeleccionada && (
+              <div style={{ ...cardStyle(), display: "grid", gap: 12, boxShadow: "none" }}>
+                <h3 style={{ margin: 0 }}>Registrar pago</h3>
+                <p style={{ margin: 0, color: TEXT_SECONDARY }}>
+                  Cuota {cuotaSeleccionada.numero} · Restante {formatEUR(cuotaSeleccionada.restante)}
+                </p>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+                  <input
+                    placeholder="Monto pagado"
+                    value={pagoMonto}
+                    onChange={(e) => setPagoMonto(e.target.value)}
+                    style={inputStyle()}
+                  />
+
+                  <select value={pagoMetodo} onChange={(e) => setPagoMetodo(e.target.value)} style={inputStyle()}>
+                    <option value="EFECTIVO">EFECTIVO</option>
+                    <option value="BIZUM">BIZUM</option>
+                    <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                  </select>
+
+                  <input type="date" value={pagoFecha} onChange={(e) => setPagoFecha(e.target.value)} style={inputStyle()} />
+
+                  <input
+                    placeholder="Nota"
+                    value={pagoNota}
+                    onChange={(e) => setPagoNota(e.target.value)}
+                    style={inputStyle()}
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button style={buttonStyle(true)} onClick={registrarPagoVisual}>
+                    Confirmar pago
+                  </button>
+                  <button
+                    style={buttonStyle()}
+                    onClick={() => {
+                      setCuotaSeleccionadaId(null);
+                      setPagoMonto("");
+                      setPagoMetodo("EFECTIVO");
+                      setPagoFecha(todayISO());
+                      setPagoNota("");
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
 
             {cargandoCuotas ? (
-              <p style={{ color: "#6b7280" }}>Cargando cobros...</p>
+              <p style={{ color: TEXT_SECONDARY }}>Cargando cobros...</p>
             ) : cobrosHoyList.length === 0 ? (
-              <p style={{ color: "#6b7280" }}>Hoy no hay cobros programados.</p>
+              <p style={{ color: TEXT_SECONDARY }}>Hoy no hay cobros programados.</p>
             ) : (
               cobrosHoyList.map(({ cuota, cliente, prestamo }) => (
                 <div
@@ -1296,35 +1564,37 @@ export default function App() {
                     justifyContent: "space-between",
                     alignItems: "center",
                     gap: 12,
-                    padding: 12,
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 14,
+                    padding: 14,
+                    border: `1px solid ${BORDER_COLOR}`,
+                    borderRadius: 16,
                     flexWrap: "wrap",
+                    background: "#fff",
                   }}
                 >
-                  <div>
-                    <strong>{cliente?.nombre || "Cliente"}</strong>
-                    <p style={{ margin: 0, color: "#6b7280" }}>{cliente?.telefono || ""}</p>
-                    <p style={{ margin: 0, color: "#6b7280" }}>
+                  <div style={{ display: "grid", gap: 4 }}>
+                    <strong style={{ fontSize: 18, color: TEXT_PRIMARY }}>{cliente?.nombre || "Cliente"}</strong>
+                    <p style={{ margin: 0, color: TEXT_SECONDARY }}>{cliente?.telefono || ""}</p>
+                    <p style={{ margin: 0, color: TEXT_SECONDARY }}>Ruta: {cliente?.ruta || "-"}</p>
+                    <p style={{ margin: 0, color: TEXT_SECONDARY }}>
                       Cuota {cuota.numero} · Total {formatEUR(cuota.monto)} · Restante {formatEUR(cuota.restante)}
                     </p>
                   </div>
 
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <span
-                      style={{
-                        background: "#f3f4f6",
-                        color: colorEstadoPrestamo(prestamo?.estado || "COBRAR HOY"),
-                        padding: "6px 10px",
-                        borderRadius: 999,
-                        fontWeight: 700,
-                        fontSize: 12,
-                      }}
-                    >
+                    <span style={badgeStyle(colorEstadoPrestamo(prestamo?.estado || "COBRAR HOY"))}>
                       {prestamo?.estado || "COBRAR HOY"}
                     </span>
 
-                    <button style={buttonStyle(true)} onClick={registrarPago}>
+                    <button
+                      style={buttonStyle(true)}
+                      onClick={() => {
+                        setCuotaSeleccionadaId(cuota.id);
+                        setPagoMonto(String(cuota.restante));
+                        setPagoMetodo("EFECTIVO");
+                        setPagoFecha(todayISO());
+                        setPagoNota("");
+                      }}
+                    >
                       Cobrar
                     </button>
                   </div>
@@ -1336,27 +1606,21 @@ export default function App() {
 
         {screen === "pagos" && (
           <div style={{ ...cardStyle(), display: "grid", gap: 12 }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 12,
-                flexWrap: "wrap",
-              }}
-            >
-              <h3 style={{ margin: 0 }}>Pagos</h3>
-              <button style={buttonStyle(true)} onClick={registrarPago}>
-                Registrar pago
-              </button>
-            </div>
+            <SectionTitle title="Pagos" subtitle="Historial con buscador" />
+
+            <input
+              placeholder="Buscar por cliente, fecha o método"
+              value={busquedaPagos}
+              onChange={(e) => setBusquedaPagos(e.target.value)}
+              style={inputStyle()}
+            />
 
             {cargandoPagos ? (
-              <p style={{ color: "#6b7280" }}>Cargando pagos...</p>
-            ) : pagos.length === 0 ? (
-              <p style={{ color: "#6b7280" }}>No hay pagos todavía.</p>
+              <p style={{ color: TEXT_SECONDARY }}>Cargando pagos...</p>
+            ) : pagosFiltrados.length === 0 ? (
+              <p style={{ color: TEXT_SECONDARY }}>No hay pagos todavía.</p>
             ) : (
-              pagos.map((p) => {
+              pagosFiltrados.map((p) => {
                 const prestamo = prestamos.find((x) => x.id === p.prestamo_id);
                 const cliente = clientes.find((c) => c.id === prestamo?.client_id);
 
@@ -1365,18 +1629,21 @@ export default function App() {
                     key={p.id}
                     style={{
                       padding: 14,
-                      border: "1px solid #e5e7eb",
-                      borderRadius: 14,
+                      border: `1px solid ${BORDER_COLOR}`,
+                      borderRadius: 16,
                       display: "grid",
                       gap: 8,
+                      background: "#fff",
                     }}
                   >
-                    <strong>{cliente?.nombre || "Cliente"}</strong>
+                    <strong style={{ fontSize: 18, color: TEXT_PRIMARY }}>{cliente?.nombre || "Cliente"}</strong>
                     <div
                       style={{
                         display: "grid",
                         gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
                         gap: 8,
+                        color: TEXT_SECONDARY,
+                        fontSize: 15,
                       }}
                     >
                       <span>Fecha: {p.fecha}</span>
@@ -1384,9 +1651,7 @@ export default function App() {
                       <span>Método: {p.metodo}</span>
                       <span>Puntual: {p.puntual ? "Sí" : "No"}</span>
                     </div>
-                    {p.nota ? (
-                      <p style={{ margin: 0, color: "#6b7280" }}>Nota: {p.nota}</p>
-                    ) : null}
+                    {p.nota ? <p style={{ margin: 0, color: TEXT_SECONDARY }}>Nota: {p.nota}</p> : null}
                   </div>
                 );
               })
