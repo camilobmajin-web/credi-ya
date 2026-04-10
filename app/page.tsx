@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { supabase } from "../lib/supabase";
-
+import jsPDF from "jspdf";
 type Screen =
   | "login"
   | "dashboard"
@@ -677,6 +677,47 @@ export default function App() {
       alert("Selecciona una cuota");
       return;
     }
+function generarReciboPDF(params: {
+  clienteNombre: string;
+  clienteDocumento?: string;
+  clienteTelefono?: string;
+  fecha: string;
+  monto: number;
+  metodo: string;
+  nota?: string;
+  saldoRestante: number;
+  numeroCuota?: number;
+  negocio?: string;
+}) {
+  const doc = new jsPDF();
+
+  const negocio = params.negocio || "CREDI YA";
+
+  doc.setFontSize(18);
+  doc.text(negocio, 20, 20);
+
+  doc.setFontSize(12);
+  doc.text("RECIBO DE PAGO", 20, 30);
+
+  let y = 45;
+
+  const line = (label: string, value: string) => {
+    doc.text(`${label}: ${value}`, 20, y);
+    y += 10;
+  };
+
+  line("Cliente", params.clienteNombre);
+  line("Documento", params.clienteDocumento || "-");
+  line("Teléfono", params.clienteTelefono || "-");
+  line("Fecha", params.fecha);
+  line("Monto pagado", formatEUR(params.monto));
+  line("Método", params.metodo);
+  line("Saldo restante", formatEUR(params.saldoRestante));
+  line("Cuota", params.numeroCuota ? String(params.numeroCuota) : "-");
+  line("Nota", params.nota || "-");
+
+  doc.save(`recibo-${params.clienteNombre.replace(/\s+/g, "-").toLowerCase()}.pdf`);
+}
 
     const cuotaBase = cuotas.find((c) => c.id === cuotaSeleccionadaId);
     if (!cuotaBase) {
@@ -809,14 +850,28 @@ export default function App() {
       }
     }
 
-    alert("Pago registrado correctamente");
-    setCuotaSeleccionadaId(null);
-    setPagoMonto("");
-    setPagoMetodo("EFECTIVO");
-    setPagoFecha(todayISO());
-    setPagoNota("");
-    await recargarTodo();
-  }
+    const cliente = clientes.find((c) => c.id === prestamo.client_id);
+
+generarReciboPDF({
+  clienteNombre: cliente?.nombre || "Cliente",
+  clienteDocumento: cliente?.documento || "",
+  clienteTelefono: cliente?.telefono || "",
+  fecha,
+  monto: montoPago,
+  metodo: pagoMetodo,
+  nota: pagoNota,
+  saldoRestante: nuevoSaldo,
+  numeroCuota: cuotaBase.numero,
+  negocio: "CREDI YA",
+});
+
+alert("Pago registrado correctamente");
+setCuotaSeleccionadaId(null);
+setPagoMonto("");
+setPagoMetodo("EFECTIVO");
+setPagoFecha(todayISO());
+setPagoNota("");
+await recargarTodo();
 
   const prestamosConEstadoReal = useMemo(() => {
     const hoy = todayISO();
