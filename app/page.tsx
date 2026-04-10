@@ -673,205 +673,164 @@ export default function App() {
   }
 
   async function registrarPagoVisual() {
-    if (!cuotaSeleccionadaId) {
-      alert("Selecciona una cuota");
-      return;
-    }
-function generarReciboPDF(params: {
-  clienteNombre: string;
-  clienteDocumento?: string;
-  clienteTelefono?: string;
-  fecha: string;
-  monto: number;
-  metodo: string;
-  nota?: string;
-  saldoRestante: number;
-  numeroCuota?: number;
-  negocio?: string;
-}) {
-  const doc = new jsPDF();
+  if (!cuotaSeleccionadaId) {
+    alert("Selecciona una cuota");
+    return;
+  }
 
-  const negocio = params.negocio || "CREDI YA";
+  const cuotaBase = cuotas.find((c) => c.id === cuotaSeleccionadaId);
+  if (!cuotaBase) {
+    alert("Cuota no válida");
+    return;
+  }
 
-  doc.setFontSize(18);
-  doc.text(negocio, 20, 20);
+  const montoPago = Number(pagoMonto || 0);
+  if (!montoPago) {
+    alert("Introduce un monto válido");
+    return;
+  }
 
-  doc.setFontSize(12);
-  doc.text("RECIBO DE PAGO", 20, 30);
+  const fecha = pagoFecha || todayISO();
+  const puntual = fecha <= cuotaBase.fecha;
 
-  let y = 45;
+  const prestamo = prestamos.find((p) => p.id === cuotaBase.prestamo_id);
+  if (!prestamo) {
+    alert("No se encontró el préstamo");
+    return;
+  }
 
-  const line = (label: string, value: string) => {
-    doc.text(`${label}: ${value}`, 20, y);
-    y += 10;
-  };
+  const cuotasPrestamo = cuotas
+    .filter((c) => c.prestamo_id === prestamo.id && c.estado !== "PAGADA")
+    .sort((a, b) => a.numero - b.numero);
 
-  line("Cliente", params.clienteNombre);
-  line("Documento", params.clienteDocumento || "-");
-  line("Teléfono", params.clienteTelefono || "-");
-  line("Fecha", params.fecha);
-  line("Monto pagado", formatEUR(params.monto));
-  line("Método", params.metodo);
-  line("Saldo restante", formatEUR(params.saldoRestante));
-  line("Cuota", params.numeroCuota ? String(params.numeroCuota) : "-");
-  line("Nota", params.nota || "-");
+  let restantePago = montoPago;
 
-  doc.save(`recibo-${params.clienteNombre.replace(/\s+/g, "-").toLowerCase()}.pdf`);
-}
+  for (const cuota of cuotasPrestamo) {
+    if (restantePago <= 0) break;
 
-    const cuotaBase = cuotas.find((c) => c.id === cuotaSeleccionadaId);
-    if (!cuotaBase) {
-      alert("Cuota no válida");
-      return;
-    }
+    const pagadoActual = Number(cuota.pagado || 0);
+    const restanteActual = Number(cuota.restante || cuota.monto);
 
-    const montoPago = Number(pagoMonto || 0);
-    if (!montoPago) {
-      alert("Introduce un monto válido");
-      return;
-    }
+    if (restanteActual <= 0) continue;
 
-    const fecha = pagoFecha || todayISO();
-    const puntual = fecha <= cuotaBase.fecha;
+    const abono = Math.min(restantePago, restanteActual);
+    const nuevoPagado = pagadoActual + abono;
+    const nuevoRestante = Math.max(0, cuota.monto - nuevoPagado);
 
-    const prestamo = prestamos.find((p) => p.id === cuotaBase.prestamo_id);
-    if (!prestamo) {
-      alert("No se encontró el préstamo");
-      return;
-    }
+    let nuevoEstado: "PENDIENTE" | "PARCIAL" | "PAGADA" | "VENCIDA" = "PENDIENTE";
+    if (nuevoRestante === 0) nuevoEstado = "PAGADA";
+    else if (nuevoPagado > 0) nuevoEstado = "PARCIAL";
+    else if (cuota.fecha < todayISO()) nuevoEstado = "VENCIDA";
 
-    const cuotasPrestamo = cuotas
-      .filter((c) => c.prestamo_id === prestamo.id && c.estado !== "PAGADA")
-      .sort((a, b) => a.numero - b.numero);
-
-    let restantePago = montoPago;
-
-    for (const cuota of cuotasPrestamo) {
-      if (restantePago <= 0) break;
-
-      const pagadoActual = Number(cuota.pagado || 0);
-      const restanteActual = Number(cuota.restante || cuota.monto);
-
-      if (restanteActual <= 0) continue;
-
-      const abono = Math.min(restantePago, restanteActual);
-      const nuevoPagado = pagadoActual + abono;
-      const nuevoRestante = Math.max(0, cuota.monto - nuevoPagado);
-
-      let nuevoEstado: "PENDIENTE" | "PARCIAL" | "PAGADA" | "VENCIDA" = "PENDIENTE";
-      if (nuevoRestante === 0) nuevoEstado = "PAGADA";
-      else if (nuevoPagado > 0) nuevoEstado = "PARCIAL";
-      else if (cuota.fecha < todayISO()) nuevoEstado = "VENCIDA";
-
-      const { error: errorCuota } = await supabase
-        .from("cuotas")
-        .update({
-          pagado: nuevoPagado,
-          restante: nuevoRestante,
-          estado: nuevoEstado,
-        })
-        .eq("id", cuota.id);
-
-      if (errorCuota) {
-        alert("Error actualizando cuota: " + errorCuota.message);
-        return;
-      }
-
-      restantePago -= abono;
-    }
-
-    const { error: errorPago } = await supabase.from("pagos").insert([
-      {
-        prestamo_id: prestamo.id,
-        fecha,
-        monto: montoPago,
-        metodo: pagoMetodo,
-        puntual,
-        nota: pagoNota,
-      },
-    ]);
-
-    if (errorPago) {
-      alert("Error guardando pago: " + errorPago.message);
-      return;
-    }
-
-    const cuotasActualizadasRaw = await supabase
+    const { error: errorCuota } = await supabase
       .from("cuotas")
-      .select("*")
-      .eq("prestamo_id", prestamo.id);
-
-    if (cuotasActualizadasRaw.error) {
-      alert("Error recalculando préstamo: " + cuotasActualizadasRaw.error.message);
-      return;
-    }
-
-    const cuotasActualizadas = cuotasActualizadasRaw.data || [];
-    const nuevoSaldo = cuotasActualizadas.reduce(
-      (acc, c) => acc + Number(c.restante || c.monto || 0),
-      0
-    );
-
-    let nuevoEstadoPrestamo: "AL DÍA" | "COBRAR HOY" | "VENCIDO" | "PAGADO" = "AL DÍA";
-    const hoy = todayISO();
-    const tieneHoy = cuotasActualizadas.some((c) => c.fecha === hoy && c.estado !== "PAGADA");
-    const tieneVencidas = cuotasActualizadas.some((c) => c.fecha < hoy && c.estado !== "PAGADA");
-
-    if (nuevoSaldo <= 0) nuevoEstadoPrestamo = "PAGADO";
-    else if (tieneVencidas) nuevoEstadoPrestamo = "VENCIDO";
-    else if (tieneHoy) nuevoEstadoPrestamo = "COBRAR HOY";
-    else nuevoEstadoPrestamo = "AL DÍA";
-
-    const { error: errorPrestamo } = await supabase
-      .from("prestamos")
       .update({
-        saldo: nuevoSaldo,
-        estado: nuevoEstadoPrestamo,
+        pagado: nuevoPagado,
+        restante: nuevoRestante,
+        estado: nuevoEstado,
       })
-      .eq("id", prestamo.id);
+      .eq("id", cuota.id);
 
-    if (errorPrestamo) {
-      alert("Error actualizando préstamo: " + errorPrestamo.message);
+    if (errorCuota) {
+      alert("Error actualizando cuota: " + errorCuota.message);
       return;
     }
 
-    const cliente = clientes.find((c) => c.id === prestamo.client_id);
-    if (cliente) {
-      const nuevoScore = cliente.score + (puntual ? 2 : -5);
+    restantePago -= abono;
+  }
 
-      const { error: errorCliente } = await supabase
-        .from("clientes")
-        .update({ score: nuevoScore })
-        .eq("id", cliente.id);
+  const { error: errorPago } = await supabase.from("pagos").insert([
+    {
+      prestamo_id: prestamo.id,
+      fecha,
+      monto: montoPago,
+      metodo: pagoMetodo,
+      puntual,
+      nota: pagoNota,
+    },
+  ]);
 
-      if (errorCliente) {
-        alert("Error actualizando cliente: " + errorCliente.message);
-        return;
-      }
+  if (errorPago) {
+    alert("Error guardando pago: " + errorPago.message);
+    return;
+  }
+
+  const cuotasActualizadasRaw = await supabase
+    .from("cuotas")
+    .select("*")
+    .eq("prestamo_id", prestamo.id);
+
+  if (cuotasActualizadasRaw.error) {
+    alert("Error recalculando préstamo: " + cuotasActualizadasRaw.error.message);
+    return;
+  }
+
+  const cuotasActualizadas = cuotasActualizadasRaw.data || [];
+  const nuevoSaldo = cuotasActualizadas.reduce(
+    (acc, c) => acc + Number(c.restante || c.monto || 0),
+    0
+  );
+
+  let nuevoEstadoPrestamo: "AL DÍA" | "COBRAR HOY" | "VENCIDO" | "PAGADO" = "AL DÍA";
+  const hoy = todayISO();
+  const tieneHoy = cuotasActualizadas.some((c) => c.fecha === hoy && c.estado !== "PAGADA");
+  const tieneVencidas = cuotasActualizadas.some((c) => c.fecha < hoy && c.estado !== "PAGADA");
+
+  if (nuevoSaldo <= 0) nuevoEstadoPrestamo = "PAGADO";
+  else if (tieneVencidas) nuevoEstadoPrestamo = "VENCIDO";
+  else if (tieneHoy) nuevoEstadoPrestamo = "COBRAR HOY";
+  else nuevoEstadoPrestamo = "AL DÍA";
+
+  const { error: errorPrestamo } = await supabase
+    .from("prestamos")
+    .update({
+      saldo: nuevoSaldo,
+      estado: nuevoEstadoPrestamo,
+    })
+    .eq("id", prestamo.id);
+
+  if (errorPrestamo) {
+    alert("Error actualizando préstamo: " + errorPrestamo.message);
+    return;
+  }
+
+  const cliente = clientes.find((c) => c.id === prestamo.client_id);
+
+  if (cliente) {
+    const nuevoScore = cliente.score + (puntual ? 2 : -5);
+
+    const { error: errorCliente } = await supabase
+      .from("clientes")
+      .update({ score: nuevoScore })
+      .eq("id", cliente.id);
+
+    if (errorCliente) {
+      alert("Error actualizando cliente: " + errorCliente.message);
+      return;
     }
+  }
 
-    const cliente = clientes.find((c) => c.id === prestamo.client_id);
+  generarReciboPDF({
+    clienteNombre: cliente?.nombre || "Cliente",
+    clienteDocumento: cliente?.documento || "",
+    clienteTelefono: cliente?.telefono || "",
+    fecha,
+    monto: montoPago,
+    metodo: pagoMetodo,
+    nota: pagoNota,
+    saldoRestante: nuevoSaldo,
+    numeroCuota: cuotaBase.numero,
+    negocio: "CREDI YA",
+  });
 
-generarReciboPDF({
-  clienteNombre: cliente?.nombre || "Cliente",
-  clienteDocumento: cliente?.documento || "",
-  clienteTelefono: cliente?.telefono || "",
-  fecha,
-  monto: montoPago,
-  metodo: pagoMetodo,
-  nota: pagoNota,
-  saldoRestante: nuevoSaldo,
-  numeroCuota: cuotaBase.numero,
-  negocio: "CREDI YA",
-});
-
-alert("Pago registrado correctamente");
-setCuotaSeleccionadaId(null);
-setPagoMonto("");
-setPagoMetodo("EFECTIVO");
-setPagoFecha(todayISO());
-setPagoNota("");
-await recargarTodo();
+  alert("Pago registrado correctamente");
+  setCuotaSeleccionadaId(null);
+  setPagoMonto("");
+  setPagoMetodo("EFECTIVO");
+  setPagoFecha(todayISO());
+  setPagoNota("");
+  await recargarTodo();
+}
 
   const prestamosConEstadoReal = useMemo(() => {
     const hoy = todayISO();
