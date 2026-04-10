@@ -842,7 +842,7 @@ async function registrarPagoVisual() {
     numeroCuota: cuotaBase.numero,
     cuotasPendientes: deudaPagada ? 0 : cuotasPendientes,
     estadoDeuda,
-    negocio: "CREDI YA",
+    logo: "CREDI YA",
   });
 
   alert(deudaPagada ? "Pago registrado. Deuda pagada." : "Pago registrado correctamente");
@@ -867,14 +867,20 @@ async function registrarPagoVisual() {
   numeroCuota?: number;
   cuotasPendientes?: number;
   estadoDeuda?: string;
-  negocio?: string;
+  logo?: string;
 }) {
   const doc = new jsPDF();
 
-  const negocio = params.negocio || "CREDI YA";
+  const negocio = params.logo || "CREDI YA";
 
+  const logo = params.logo; // base64 o URL en el futuro
+
+if (logo) {
+  doc.addImage(logo, "PNG", 20, 10, 40, 20);
+} else {
   doc.setFontSize(18);
   doc.text(negocio, 20, 20);
+}
 
   doc.setFontSize(12);
   doc.text("RECIBO DE PAGO", 20, 30);
@@ -887,7 +893,7 @@ async function registrarPagoVisual() {
   };
 
   line("Cliente", params.clienteNombre || "Cliente");
-  line("Documento", params.clienteDocumento || "-");
+  line("DOCUMENTO", params.clienteDocumento || "NO REGISTRO");
   line("Telefono", params.clienteTelefono || "-");
   line("Fecha", params.fecha || "-");
   line("Monto pagado", formatEUR(params.monto || 0));
