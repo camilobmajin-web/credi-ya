@@ -246,6 +246,7 @@ export default function App() {
     nota?: string;
     saldoRestante: number;
     numeroCuota?: number;
+    cuotasPendientes?: number;
     negocio?: string;
   }) {
     const doc = new jsPDF();
@@ -273,9 +274,14 @@ export default function App() {
     line("Metodo", params.metodo || "-");
     line("Saldo restante", formatEUR(params.saldoRestante || 0));
     line("Cuota", params.numeroCuota ? String(params.numeroCuota) : "-");
+    line("Cuotas pendientes", String(params.cuotasPendientes || 0));
     line("Nota", params.nota || "-");
 
-    doc.save(`recibo-${(params.clienteNombre || "cliente").replace(/\s+/g, "-").toLowerCase()}.pdf`);
+    doc.save(
+      `recibo-${(params.clienteNombre || "cliente")
+        .replace(/\s+/g, "-")
+        .toLowerCase()}.pdf`
+    );
   }
 
   const [screen, setScreen] = useState<Screen>("login");
@@ -319,7 +325,8 @@ export default function App() {
   const [prestamoClienteId, setPrestamoClienteId] = useState("");
   const [prestamoMonto, setPrestamoMonto] = useState("");
   const [prestamoInteres, setPrestamoInteres] = useState("0.15");
-  const [prestamoFrecuencia, setPrestamoFrecuencia] = useState<Prestamo["frecuencia"]>("DIARIO");
+  const [prestamoFrecuencia, setPrestamoFrecuencia] =
+    useState<Prestamo["frecuencia"]>("DIARIO");
   const [prestamoCuotas, setPrestamoCuotas] = useState("20");
   const [prestamoFechaInicio, setPrestamoFechaInicio] = useState(todayISO());
 
@@ -340,6 +347,7 @@ export default function App() {
 
   async function cargarClientes() {
     setCargandoClientes(true);
+
     const { data, error } = await supabase
       .from("clientes")
       .select("*")
@@ -371,6 +379,7 @@ export default function App() {
 
   async function cargarPrestamos() {
     setCargandoPrestamos(true);
+
     const { data, error } = await supabase
       .from("prestamos")
       .select("*")
@@ -402,6 +411,7 @@ export default function App() {
 
   async function cargarPagos() {
     setCargandoPagos(true);
+
     const { data, error } = await supabase
       .from("pagos")
       .select("*")
@@ -429,6 +439,7 @@ export default function App() {
 
   async function cargarCuotas() {
     setCargandoCuotas(true);
+
     const { data, error } = await supabase
       .from("cuotas")
       .select("*")
@@ -695,9 +706,7 @@ export default function App() {
       };
     });
 
-    const { error: errorCuotas } = await supabase
-      .from("cuotas")
-      .insert(cuotasInsert);
+    const { error: errorCuotas } = await supabase.from("cuotas").insert(cuotasInsert);
 
     if (errorCuotas) {
       alert("Error creando cuotas: " + errorCuotas.message);
@@ -777,18 +786,16 @@ export default function App() {
       restantePago -= abono;
     }
 
-    const { error: errorPago } = await supabase
-      .from("pagos")
-      .insert([
-        {
-          prestamo_id: prestamo.id,
-          fecha,
-          monto: montoPagoNum,
-          metodo: pagoMetodo,
-          puntual,
-          nota: pagoNota,
-        },
-      ]);
+    const { error: errorPago } = await supabase.from("pagos").insert([
+      {
+        prestamo_id: prestamo.id,
+        fecha,
+        monto: montoPagoNum,
+        metodo: pagoMetodo,
+        puntual,
+        nota: pagoNota,
+      },
+    ]);
 
     if (errorPago) {
       alert("Error guardando pago: " + errorPago.message);
@@ -850,6 +857,10 @@ export default function App() {
       }
     }
 
+    const cuotasPendientes = cuotasActualizadas.filter(
+      (c: any) => c.estado !== "PAGADA"
+    ).length;
+
     generarReciboPDF({
       clienteNombre: cliente?.nombre || "Cliente",
       clienteDocumento: cliente?.documento || "",
@@ -860,6 +871,7 @@ export default function App() {
       nota: pagoNota,
       saldoRestante: nuevoSaldo,
       numeroCuota: cuotaBase.numero,
+      cuotasPendientes,
       negocio: "CREDI YA",
     });
 
@@ -877,16 +889,17 @@ export default function App() {
 
     return prestamos.map((p) => {
       const cuotasPrestamo = cuotas.filter((c) => c.prestamo_id === p.id);
+      const saldoReal = cuotasPrestamo.reduce((acc, c) => acc + Number(c.restante || 0), 0);
       const tieneHoy = cuotasPrestamo.some((c) => c.fecha === hoy && c.estado !== "PAGADA");
       const tieneVencidas = cuotasPrestamo.some((c) => c.fecha < hoy && c.estado !== "PAGADA");
 
       let estado: Prestamo["estado"] = p.estado;
-      if (p.saldo <= 0) estado = "PAGADO";
+      if (saldoReal <= 0) estado = "PAGADO";
       else if (tieneVencidas) estado = "VENCIDO";
       else if (tieneHoy) estado = "COBRAR HOY";
       else estado = "AL DÍA";
 
-      return { ...p, estado };
+      return { ...p, saldo: saldoReal, estado };
     });
   }, [prestamos, cuotas]);
 
@@ -900,6 +913,7 @@ export default function App() {
 
   const prestamosFiltrados = useMemo(() => {
     const q = busquedaPrestamos.toLowerCase().trim();
+
     return prestamosConEstadoReal.filter((p) => {
       const cliente = clientes.find((c) => c.id === p.client_id);
       const texto = `${cliente?.nombre || ""} ${cliente?.telefono || ""} ${cliente?.ruta || ""}`.toLowerCase();
@@ -924,7 +938,8 @@ export default function App() {
         return { cuota: c, prestamo, cliente };
       })
       .filter(({ cuota, cliente }) => {
-        const texto = `${cliente?.nombre || ""} ${cliente?.telefono || ""} ${cliente?.ruta || ""} ${cuota.fecha}`.toLowerCase();
+        const texto =
+          `${cliente?.nombre || ""} ${cliente?.telefono || ""} ${cliente?.ruta || ""} ${cuota.fecha}`.toLowerCase();
         const coincideBusqueda = texto.includes(q);
         const coincideHoy = soloCobrosHoy ? cuota.fecha === hoy : true;
         return coincideBusqueda && coincideHoy;
@@ -938,6 +953,7 @@ export default function App() {
 
   const pagosFiltrados = useMemo(() => {
     const q = busquedaPagos.toLowerCase().trim();
+
     return pagos.filter((p) => {
       const prestamo = prestamos.find((x) => x.id === p.prestamo_id);
       const cliente = clientes.find((c) => c.id === prestamo?.client_id);
@@ -952,8 +968,8 @@ export default function App() {
   );
 
   const totalPendiente = useMemo(
-    () => prestamos.reduce((acc, p) => acc + p.saldo, 0),
-    [prestamos]
+    () => cuotas.reduce((acc, c) => acc + Number(c.restante || 0), 0),
+    [cuotas]
   );
 
   const totalCobrado = useMemo(
@@ -966,20 +982,30 @@ export default function App() {
   const clientesRegulares = clientes.filter((c) => c.nivel === "REGULAR").length;
   const clientesMorosos = clientes.filter((c) => c.nivel === "MOROSO").length;
 
-  const clienteSeleccionado = clientes.find((c) => c.id === clienteSeleccionadoId) || null;
-  const prestamosCliente = prestamosConEstadoReal.filter((p) => p.client_id === clienteSeleccionadoId);
+  const clienteSeleccionado =
+    clientes.find((c) => c.id === clienteSeleccionadoId) || null;
+
+  const prestamosCliente = prestamosConEstadoReal.filter(
+    (p) => p.client_id === clienteSeleccionadoId
+  );
+
   const pagosCliente = pagos.filter((p) => {
     const prestamo = prestamos.find((x) => x.id === p.prestamo_id);
     return prestamo?.client_id === clienteSeleccionadoId;
   });
 
-  const cuotaSeleccionada = cuotas.find((c) => c.id === cuotaSeleccionadaId) || null;
+  const cuotaSeleccionada =
+    cuotas.find((c) => c.id === cuotaSeleccionadaId) || null;
 
   function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
     return (
       <div style={{ display: "grid", gap: 4 }}>
         <h2 style={{ margin: 0, fontSize: 28, color: TEXT_PRIMARY }}>{title}</h2>
-        {subtitle ? <p style={{ margin: 0, color: TEXT_SECONDARY, fontSize: 15 }}>{subtitle}</p> : null}
+        {subtitle ? (
+          <p style={{ margin: 0, color: TEXT_SECONDARY, fontSize: 15 }}>
+            {subtitle}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -1132,12 +1158,7 @@ export default function App() {
                 >
                   Nuevo préstamo
                 </button>
-                <button
-                  style={buttonStyle()}
-                  onClick={() => {
-                    setScreen("cobros");
-                  }}
-                >
+                <button style={buttonStyle()} onClick={() => setScreen("cobros")}>
                   Registrar pago
                 </button>
                 <button style={buttonStyle()} onClick={recargarTodo}>
@@ -1414,7 +1435,11 @@ export default function App() {
                     gap: 10,
                   }}
                 >
-                  <select value={prestamoClienteId} onChange={(e) => setPrestamoClienteId(e.target.value)} style={inputStyle()}>
+                  <select
+                    value={prestamoClienteId}
+                    onChange={(e) => setPrestamoClienteId(e.target.value)}
+                    style={inputStyle()}
+                  >
                     <option value="">Selecciona cliente</option>
                     {clientes.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -1423,8 +1448,19 @@ export default function App() {
                     ))}
                   </select>
 
-                  <input placeholder="Monto" value={prestamoMonto} onChange={(e) => setPrestamoMonto(e.target.value)} style={inputStyle()} />
-                  <input placeholder="Interés (ej 0.15)" value={prestamoInteres} onChange={(e) => setPrestamoInteres(e.target.value)} style={inputStyle()} />
+                  <input
+                    placeholder="Monto"
+                    value={prestamoMonto}
+                    onChange={(e) => setPrestamoMonto(e.target.value)}
+                    style={inputStyle()}
+                  />
+
+                  <input
+                    placeholder="Interés (ej 0.15)"
+                    value={prestamoInteres}
+                    onChange={(e) => setPrestamoInteres(e.target.value)}
+                    style={inputStyle()}
+                  />
 
                   <select
                     value={prestamoFrecuencia}
@@ -1449,7 +1485,12 @@ export default function App() {
                     style={inputStyle()}
                   />
 
-                  <input type="date" value={prestamoFechaInicio} onChange={(e) => setPrestamoFechaInicio(e.target.value)} style={inputStyle()} />
+                  <input
+                    type="date"
+                    value={prestamoFechaInicio}
+                    onChange={(e) => setPrestamoFechaInicio(e.target.value)}
+                    style={inputStyle()}
+                  />
                 </div>
 
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1783,7 +1824,9 @@ export default function App() {
                       background: "#fff",
                     }}
                   >
-                    <strong style={{ fontSize: 18, color: TEXT_PRIMARY }}>{cliente?.nombre || "Cliente"}</strong>
+                    <strong style={{ fontSize: 18, color: TEXT_PRIMARY }}>
+                      {cliente?.nombre || "Cliente"}
+                    </strong>
                     <div
                       style={{
                         display: "grid",
