@@ -972,7 +972,9 @@ return txt.includes(q);
 const cobrosFiltrados = useMemo(() => {
 const hoy = todayISO();
 const q = busquedaCobros.toLowerCase().trim();
-
+const moraTotalDashboard = cuotas.reduce((acc, c) => {
+  return acc + calcularMoraVisual(c.fecha, c.restante || 0);
+}, 0);
 return cuotas
 .filter((c) => Number(c.restante || 0) > 0)
 .map((cuota) => {
@@ -1061,13 +1063,12 @@ const saldoPendiente = useMemo(
 () => cuotas.reduce((acc, c) => acc + Number(c.restante || 0), 0),
 [cuotas]
 );
-const totalVencido = useMemo(
-() =>
-cuotas
-.filter((c) => c.estado === "VENCIDA" || (c.fecha < todayISO() && Number(c.restante || 0) > 0))
-.reduce((acc, c) => acc + Number(c.restante || 0), 0),
-[cuotas]
-);
+const totalVencido = useMemo(() => {
+  return cuotas.reduce((acc, c) => acc + Number(c.restante || 0), 0);
+}, [cuotas]);
+const moraTotalDashboard = cuotas.reduce((acc, c) => {
+  return acc + calcularMoraVisual(c.fecha, c.restante || 0);
+}, 0);
 
 const cobrosHoy = useMemo(
 () => cuotas.filter((c) => c.fecha === todayISO() && Number(c.restante || 0) > 0).length,
@@ -1205,7 +1206,16 @@ gap: 16,
 <MetricCard title="Total cobrado" value={formatEUR(totalCobrado)} />
 <MetricCard title="Saldo pendiente" value={formatEUR(saldoPendiente)} />
 <MetricCard title="Deuda vencida" value={formatEUR(totalVencido)} />
+
+<div style={cardStyle()}>
+  <p style={{ margin: 0, color: MUTED }}>Mora acumulada</p>
+  <h3 style={{ margin: "10px 0 0", fontSize: 32, color: DANGER }}>
+    {formatEUR(moraTotalDashboard)}
+  </h3>
 </div>
+</div>
+
+
 
 <div
 style={{
