@@ -312,7 +312,7 @@ export default function App() {
  const [prestamoFrecuencia, setPrestamoFrecuencia] = useState<"DIARIO" | "SEMANAL" | "MENSUAL">("DIARIO");
  const [prestamoCuotas, setPrestamoCuotas] = useState("20");
  const [prestamoFechaInicio, setPrestamoFechaInicio] = useState(todayISO());
-
+const [prestamoPlanDiario, setPrestamoPlanDiario] = useState("20");
  const [selectedCobroCuotaId, setSelectedCobroCuotaId] = useState<string | null>(null);
  const [pagoMonto, setPagoMonto] = useState("");
  const [pagoMetodo, setPagoMetodo] = useState("EFECTIVO");
@@ -1212,57 +1212,152 @@ await cargarDatosUsuario(usuarioActual.id);
  )}
 
  {screen === "prestamos" && (
- <div style={{ ...cardStyle(), display: "grid", gap: 16 }}>
- <SectionTitle title="Préstamos" subtitle="Interés por defecto 15% y frecuencia diaria/semanal/mensual" />
- <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
- <button style={buttonStyle(true)} onClick={() => setMostrarFormPrestamo((v) => !v)}>
- {mostrarFormPrestamo ? "Cerrar formulario" : "Nuevo préstamo"}
- </button>
- </div>
+  <div style={{ ...cardStyle(), display: "grid", gap: 16 }}>
+    <SectionTitle
+      title="Préstamos"
+      subtitle="Interés por defecto 15% y frecuencia diaria/semanal/mensual"
+    />
 
- <input style={inputStyle()} placeholder="Buscar por cliente o estado" value={busquedaPrestamos} onChange={(e) => setBusquedaPrestamos(e.target.value)} />
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <button
+        style={buttonStyle(true)}
+        onClick={() => setMostrarFormPrestamo((v) => !v)}
+      >
+        {mostrarFormPrestamo ? "Cerrar formulario" : "Nuevo préstamo"}
+      </button>
+    </div>
 
- {mostrarFormPrestamo && (
- <div style={{ ...cardStyle(), display: "grid", gap: 12 }}>
- <select style={inputStyle()} value={prestamoClienteId} onChange={(e) => setPrestamoClienteId(e.target.value)}>
- <option value="">Selecciona cliente</option>
- {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
- </select>
- <input style={inputStyle()} placeholder="Monto" value={prestamoMonto} onChange={(e) => setPrestamoMonto(e.target.value)} />
- <input style={inputStyle()} placeholder="Interés (por defecto 0.15)" value={prestamoInteres} onChange={(e) => setPrestamoInteres(e.target.value)} />
- <select style={inputStyle()} value={prestamoFrecuencia} onChange={(e) => setPrestamoFrecuencia(e.target.value as "DIARIO" | "SEMANAL" | "MENSUAL") }>
- <option value="DIARIO">DIARIO</option>
- <option value="SEMANAL">SEMANAL</option>
- <option value="MENSUAL">MENSUAL</option>
- </select>
- <input style={inputStyle()} placeholder="Número de cuotas" value={prestamoCuotas} onChange={(e) => setPrestamoCuotas(e.target.value)} />
- <input style={inputStyle()} type="date" value={prestamoFechaInicio} onChange={(e) => setPrestamoFechaInicio(e.target.value)} />
- <button style={buttonStyle(true)} onClick={guardarPrestamo}>Guardar préstamo</button>
- </div>
- )}
+    <input
+      style={inputStyle()}
+      placeholder="Buscar por cliente o estado"
+      value={busquedaPrestamos}
+      onChange={(e) => setBusquedaPrestamos(e.target.value)}
+    />
 
- <div style={{ display: "grid", gap: 10 }}>
- {prestamosFiltrados.length === 0 ? (
- <p style={{ margin: 0, color: MUTED }}>No hay préstamos.</p>
- ) : (
- prestamosFiltrados.map((p) => (
- <div key={p.id} style={{ ...cardStyle(), display: "grid", gap: 8 }}>
- <strong>{p.cliente?.nombre || "Cliente"}</strong>
- <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8, color: MUTED }}>
- <span>Monto: {formatEUR(Number(p.monto || 0))}</span>
- <span>Total: {formatEUR(Number(p.total || 0))}</span>
- <span>Cuota: {formatEUR(Number(p.cuota || 0))}</span>
- <span>Saldo real: {formatEUR(Number(p.saldoReal || 0))}</span>
- <span>Frecuencia: {p.frecuencia || "-"}</span>
- <span>Inicio: {p.fecha_inicio || "-"}</span>
- </div>
- <span style={badgeStyle(badgeColor(p.estadoReal))}>{p.estadoReal}</span>
- </div>
- ))
- )}
- </div>
- </div>
- )}
+    {mostrarFormPrestamo && (
+      <div style={{ ...cardStyle(), display: "grid", gap: 12 }}>
+        <select
+          style={inputStyle()}
+          value={prestamoClienteId}
+          onChange={(e) => setPrestamoClienteId(e.target.value)}
+        >
+          <option value="">Selecciona cliente</option>
+          {clientes.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nombre}
+            </option>
+          ))}
+        </select>
+
+        <input
+          style={inputStyle()}
+          placeholder="Monto"
+          value={prestamoMonto}
+          onChange={(e) => setPrestamoMonto(e.target.value)}
+        />
+
+        <input
+          style={inputStyle()}
+          placeholder="Interés (por defecto 0.15)"
+          value={prestamoInteres}
+          onChange={(e) => setPrestamoInteres(e.target.value)}
+        />
+
+        <select
+          style={inputStyle()}
+          value={prestamoFrecuencia}
+          onChange={(e) => {
+            const nuevaFrecuencia = e.target.value as
+              | "DIARIO"
+              | "SEMANAL"
+              | "MENSUAL";
+
+            setPrestamoFrecuencia(nuevaFrecuencia);
+
+            if (nuevaFrecuencia === "DIARIO") {
+              setPrestamoPlanDiario("20");
+              setPrestamoCuotas("20");
+            } else if (nuevaFrecuencia === "SEMANAL") {
+              setPrestamoCuotas("4");
+            } else if (nuevaFrecuencia === "MENSUAL") {
+              setPrestamoCuotas("1");
+            }
+          }}
+        >
+          <option value="DIARIO">DIARIO</option>
+          <option value="SEMANAL">SEMANAL</option>
+          <option value="MENSUAL">MENSUAL</option>
+        </select>
+
+        {prestamoFrecuencia === "DIARIO" && (
+          <select
+            style={inputStyle()}
+            value={prestamoPlanDiario}
+            onChange={(e) => {
+              const dias = e.target.value;
+              setPrestamoPlanDiario(dias);
+              setPrestamoCuotas(dias);
+            }}
+          >
+            <option value="20">20 días</option>
+            <option value="24">24 días</option>
+            <option value="30">30 días</option>
+          </select>
+        )}
+
+        <input
+          style={inputStyle()}
+          placeholder="Número de cuotas"
+          value={prestamoCuotas}
+          onChange={(e) => setPrestamoCuotas(e.target.value)}
+        />
+
+        <input
+          style={inputStyle()}
+          type="date"
+          value={prestamoFechaInicio}
+          onChange={(e) => setPrestamoFechaInicio(e.target.value)}
+        />
+
+        <button style={buttonStyle(true)} onClick={guardarPrestamo}>
+          Guardar préstamo
+        </button>
+      </div>
+    )}
+
+    <div style={{ display: "grid", gap: 10 }}>
+      {prestamosFiltrados.length === 0 ? (
+        <p style={{ margin: 0, color: MUTED }}>No hay préstamos.</p>
+      ) : (
+        prestamosFiltrados.map((p) => (
+          <div key={p.id} style={{ ...cardStyle(), display: "grid", gap: 8 }}>
+            <strong>{p.cliente?.nombre || "Cliente"}</strong>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                gap: 8,
+                color: MUTED,
+              }}
+            >
+              <span>Monto: {formatEUR(Number(p.monto || 0))}</span>
+              <span>Total: {formatEUR(Number(p.total || 0))}</span>
+              <span>Cuota: {formatEUR(Number(p.cuota || 0))}</span>
+              <span>Saldo real: {formatEUR(Number(p.saldoReal || 0))}</span>
+              <span>Frecuencia: {p.frecuencia || "-"}</span>
+              <span>Inicio: {p.fecha_inicio || "-"}</span>
+            </div>
+
+            <span style={badgeStyle(badgeColor(p.estadoReal))}>
+              {p.estadoReal}
+            </span>
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+)}
 
  {screen === "cobros" && (
  <div style={{ ...cardStyle(), display: "grid", gap: 16 }}>
