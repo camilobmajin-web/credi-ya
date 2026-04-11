@@ -638,6 +638,7 @@ export default function App() {
   cuotasTotales: number;
   montoPrestamo: number;
   totalPrestamo: number;
+  frecuencia: string;
 }) {
   const doc = new jsPDF();
 
@@ -688,8 +689,9 @@ export default function App() {
   y += 8;
 
   line("Préstamo entregado", formatEUR(args.montoPrestamo));
-  line("Total del préstamo", formatEUR(args.totalPrestamo));
-  line("Estado actual", estado, true);
+line("Total del préstamo", formatEUR(args.totalPrestamo));
+line("Frecuencia", args.frecuencia);
+line("Estado actual", estado, true);
   line("Deuda activa", formatEUR(args.saldo), true);
   line("Mora acumulada", formatEUR(args.mora));
 
@@ -898,6 +900,7 @@ generarReciboPDF({
   cuotasTotales: Number(prestamo.cuotas || 0),
   montoPrestamo: Number(prestamo.monto || 0),
   totalPrestamo: Number(prestamo.total || 0),
+  frecuencia:  prestamo?.frecuencia || "-",
 });
 
 await cargarDatosUsuario(usuarioActual.id);
