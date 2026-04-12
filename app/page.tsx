@@ -80,11 +80,12 @@ type Pago = {
 };
 
 type BusinessSettings = {
- id?: string;
- usuario_id?: string;
- negocio?: string;
- logo_base64?: string;
- interes_mora_diario?: number;
+  id?: string;
+  usuario_id?: string;
+  negocio?: string;
+  logo_base64?: string;
+  interes_mora_diario?: number;
+  moneda?: string;
 };
 
 type PrestamoReal = Prestamo & {
@@ -110,11 +111,6 @@ const SESSION_KEY = "crediya_usuario_actual";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-const formatEUR = (n: number) =>
- new Intl.NumberFormat("es-ES", {
- style: "currency",
- currency: "EUR",
- }).format(Number(n || 0));
 
 function cardStyle(): CSSProperties {
  return {
@@ -287,7 +283,15 @@ const [prestamoPlanMensual, setPrestamoPlanMensual] = useState("1");
  const [cuotas, setCuotas] = useState<Cuota[]>([]);
  const [pagos, setPagos] = useState<Pago[]>([]);
  const [business, setBusiness] = useState<BusinessSettings | null>(null);
-
+const formatMoney = (
+  n: number,
+  currency = business?.moneda || "EUR",
+  locale = "es-ES"
+) =>
+  new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+  }).format(Number(n || 0));
  const [loading, setLoading] = useState(false);
  const [busquedaClientes, setBusquedaClientes] = useState("");
  const [busquedaPrestamos, setBusquedaPrestamos] = useState("");
@@ -328,6 +332,7 @@ const [prestamoPlanDiario, setPrestamoPlanDiario] = useState("20");
  const [configNegocio, setConfigNegocio] = useState("CREDI YA");
  const [configInteresMora, setConfigInteresMora] = useState("0.01");
  const [configLogoBase64, setConfigLogoBase64] = useState("");
+const [configMoneda, setConfigMoneda] = useState("EUR");
 
  useEffect(() => {
  void cargarUsuarios();
@@ -366,11 +371,13 @@ const [prestamoPlanDiario, setPrestamoPlanDiario] = useState("20");
  setConfigNegocio(cfg.negocio || "CREDI YA");
  setConfigInteresMora(String(cfg.interes_mora_diario ?? 0.01));
  setConfigLogoBase64(cfg.logo_base64 || "");
+ setConfigMoneda(cfg.moneda || "EUR");
  } else {
  setBusiness(null);
  setConfigNegocio("CREDI YA");
  setConfigInteresMora("0.01");
  setConfigLogoBase64("");
+ setConfigMoneda("EUR");
  }
  }
 
@@ -381,6 +388,7 @@ const [prestamoPlanDiario, setPrestamoPlanDiario] = useState("20");
  negocio: configNegocio || "CREDI YA",
  logo_base64: configLogoBase64 || "",
  interes_mora_diario: Number(configInteresMora || 0.01),
+ moneda: configMoneda || "EUR"
  };
 
  if (business?.id) {
@@ -690,12 +698,12 @@ const [prestamoPlanDiario, setPrestamoPlanDiario] = useState("20");
   doc.text("Detalle del préstamo", 20, y);
   y += 8;
 
-  line("Préstamo entregado", formatEUR(args.montoPrestamo));
-line("Total del préstamo", formatEUR(args.totalPrestamo));
+  line("Préstamo entregado", formatMoney(args.montoPrestamo));
+line("Total del préstamo", formatMoney(args.totalPrestamo));
 line("Frecuencia", args.frecuencia);
 line("Estado actual", estado, true);
-  line("Deuda activa", formatEUR(args.saldo), true);
-  line("Mora acumulada", formatEUR(args.mora));
+  line("Deuda activa", formatMoney(args.saldo), true);
+  line("Mora acumulada", formatMoney(args.mora));
 
   y += 4;
   doc.line(20, y, 190, y);
@@ -718,7 +726,7 @@ line("Estado actual", estado, true);
   doc.text("Detalle del pago", 20, y);
   y += 8;
 
-  line("Monto pagado", formatEUR(args.monto), true);
+  line("Monto pagado", formatMoney(args.monto), true);
   line("Método", args.metodo);
   line("Nota", args.nota || "-");
 
@@ -1082,11 +1090,11 @@ await cargarDatosUsuario(usuarioActual.id);
  {screen === "dashboard" && (
  <>
  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
- <MetricCard title="Total prestado" value={formatEUR(totalPrestado)} />
- <MetricCard title="Total cobrado" value={formatEUR(totalCobrado)} />
- <MetricCard title="Saldo pendiente" value={formatEUR(saldoPendiente)} />
- <MetricCard title="Deuda vencida" value={formatEUR(totalVencido)} />
- <MetricCard title="Mora acumulada" value={formatEUR(moraTotal)} danger />
+ <MetricCard title="Total prestado" value={formatMoney(totalPrestado)} />
+ <MetricCard title="Total cobrado" value={formatMoney(totalCobrado)} />
+ <MetricCard title="Saldo pendiente" value={formatMoney(saldoPendiente)} />
+ <MetricCard title="Deuda vencida" value={formatMoney(totalVencido)} />
+ <MetricCard title="Mora acumulada" value={formatMoney(moraTotal)} danger />
  <MetricCard title="Cobros hoy" value={cobrosHoy} />
  <MetricCard title="Clientes VIP" value={clientesVip} />
  <MetricCard title="Clientes buenos" value={clientesBuenos} />
@@ -1183,9 +1191,9 @@ await cargarDatosUsuario(usuarioActual.id);
  ) : (
  prestamosCliente.map((p) => (
  <div key={p.id} style={{ ...cardStyle(), display: "grid", gap: 6 }}>
- <span>Monto: {formatEUR(Number(p.monto || 0))}</span>
- <span>Cuota: {formatEUR(Number(p.cuota || 0))}</span>
- <span>Saldo real: {formatEUR(Number(p.saldoReal || 0))}</span>
+ <span>Monto: {formatMoney(Number(p.monto || 0))}</span>
+ <span>Cuota: {formatMoney(Number(p.cuota || 0))}</span>
+ <span>Saldo real: {formatMoney(Number(p.saldoReal || 0))}</span>
  <span style={badgeStyle(badgeColor(p.estadoReal))}>{p.estadoReal}</span>
  </div>
  ))
@@ -1199,7 +1207,7 @@ await cargarDatosUsuario(usuarioActual.id);
  ) : (
  pagosCliente.map((p) => (
  <div key={p.id} style={{ ...cardStyle(), display: "grid", gap: 6 }}>
- <strong>{formatEUR(Number(p.monto || 0))}</strong>
+ <strong>{formatMoney(Number(p.monto || 0))}</strong>
  <span style={{ color: MUTED }}>{p.metodo || "EFECTIVO"} · {p.fecha}</span>
  <span style={{ color: MUTED }}>{p.nota || "-"}</span>
  </div>
@@ -1381,10 +1389,10 @@ await cargarDatosUsuario(usuarioActual.id);
                 color: MUTED,
               }}
             >
-              <span>Monto: {formatEUR(Number(p.monto || 0))}</span>
-              <span>Total: {formatEUR(Number(p.total || 0))}</span>
-              <span>Cuota: {formatEUR(Number(p.cuota || 0))}</span>
-              <span>Saldo real: {formatEUR(Number(p.saldoReal || 0))}</span>
+              <span>Monto: {formatMoney(Number(p.monto || 0))}</span>
+              <span>Total: {formatMoney(Number(p.total || 0))}</span>
+              <span>Cuota: {formatMoney(Number(p.cuota || 0))}</span>
+              <span>Saldo real: {formatMoney(Number(p.saldoReal || 0))}</span>
               <span>Frecuencia: {p.frecuencia || "-"}</span>
               <span>Inicio: {p.fecha_inicio || "-"}</span>
             </div>
@@ -1435,8 +1443,8 @@ await cargarDatosUsuario(usuarioActual.id);
  <strong>{cliente?.nombre || "Cliente"}</strong>
  <span style={{ color: MUTED }}>Fecha: {cuota.fecha}</span>
  <span style={{ color: MUTED }}>Cuota #{Number(cuota.numero || 0)}</span>
- <span style={{ color: MUTED }}>Restante: {formatEUR(Number(cuota.restante || 0))}</span>
- <span style={{ color: DANGER }}>Mora: {formatEUR(mora)}</span>
+ <span style={{ color: MUTED }}>Restante: {formatMoney(Number(cuota.restante || 0))}</span>
+ <span style={{ color: DANGER }}>Mora: {formatMoney(mora)}</span>
  </div>
  <div style={{ display: "grid", gap: 8, alignContent: "start" }}>
  <span style={badgeStyle(badgeColor(cuota.fecha < todayISO() ? "VENCIDA" : cuota.fecha === todayISO() ? "COBRAR HOY" : cuota.estado || "PENDIENTE"))}>
@@ -1479,7 +1487,7 @@ await cargarDatosUsuario(usuarioActual.id);
  return (
  <div key={p.id} style={{ ...cardStyle(), display: "grid", gap: 6 }}>
  <strong>{cliente?.nombre || "Cliente"}</strong>
- <span style={{ color: MUTED }}>Fecha: {p.fecha} · Monto: {formatEUR(Number(p.monto || 0))}</span>
+ <span style={{ color: MUTED }}>Fecha: {p.fecha} · Monto: {formatMoney(Number(p.monto || 0))}</span>
  <span style={{ color: MUTED }}>Método: {p.metodo || "EFECTIVO"} · Puntual: {p.puntual ? "Sí" : "No"}</span>
  <span style={{ color: MUTED }}>Nota: {p.nota || "-"}</span>
  </div>
@@ -1502,8 +1510,8 @@ await cargarDatosUsuario(usuarioActual.id);
  <div key={item.cliente.id} style={{ ...cardStyle(), display: "grid", gap: 6 }}>
  <strong>{item.cliente.nombre}</strong>
  <span style={{ color: MUTED }}>Teléfono: {item.cliente.telefono || "-"}</span>
- <span style={{ color: MUTED }}>Total vencido: {formatEUR(item.totalVencido)}</span>
- <span style={{ color: DANGER }}>Mora acumulada: {formatEUR(item.totalMora)}</span>
+ <span style={{ color: MUTED }}>Total vencido: {formatMoney(item.totalVencido)}</span>
+ <span style={{ color: DANGER }}>Mora acumulada: {formatMoney(item.totalMora)}</span>
  <span style={{ color: MUTED }}>Días de atraso: {item.diasMax}</span>
  <span style={{ color: MUTED }}>Cuotas vencidas: {item.cuotasVencidas}</span>
  </div>
@@ -1518,6 +1526,17 @@ await cargarDatosUsuario(usuarioActual.id);
  <SectionTitle title="Configuración" subtitle="Nombre del negocio, logo e interés de mora por usuario" />
  <input style={inputStyle()} placeholder="Nombre del negocio" value={configNegocio} onChange={(e) => setConfigNegocio(e.target.value)} />
  <input style={inputStyle()} placeholder="Interés mora diario. Ej: 0.01" value={configInteresMora} onChange={(e) => setConfigInteresMora(e.target.value)} />
+ <select
+  style={inputStyle()}
+  value={configMoneda}
+  onChange={(e) => setConfigMoneda(e.target.value)}
+>
+  <option value="EUR">Euro (€)</option>
+  <option value="USD">Dólar ($)</option>
+  <option value="COP">Peso colombiano ($)</option>
+  <option value="MXN">Peso mexicano ($)</option>
+  <option value="DOP">Peso dominicano (RD$)</option>
+</select>
  <input type="file" accept="image/*" onChange={(e) => void onLogoChange(e.target.files?.[0] || null)} />
  {configLogoBase64 ? <img src={configLogoBase64} alt="logo" style={{ width: 120, height: 60, objectFit: "contain", border: `1px solid ${BORDER}`, borderRadius: 8, background: "#fff" }} /> : null}
  <button style={buttonStyle(true)} onClick={() => void guardarBusiness()}>Guardar configuración</button>
