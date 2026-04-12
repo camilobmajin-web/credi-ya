@@ -108,6 +108,7 @@ const WARNING = "#d97706";
 const DANGER = "#dc2626";
 const INFO = "#2563eb";
 const SESSION_KEY = "crediya_usuario_actual";
+const SESSION_PERSIST_KEY = "crediya_recordar_sesion";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -348,11 +349,11 @@ const [configMoneda, setConfigMoneda] = useState("EUR");
  }, []);
 
  useEffect(() => {
- if (!usuarioActual?.id) return;
- localStorage.setItem(SESSION_KEY, JSON.stringify(usuarioActual));
- void cargarDatosUsuario(usuarioActual.id);
- void cargarBusiness(usuarioActual.id);
- }, [usuarioActual?.id]);
+  if (!usuarioActual?.id) return;
+
+  void cargarDatosUsuario(usuarioActual.id);
+  void cargarBusiness(usuarioActual.id);
+}, [usuarioActual?.id]);
 
  async function cargarUsuarios() {
  const { data, error } = await supabase.from("usuarios_app").select("*").order("created_at", { ascending: true });
@@ -1544,7 +1545,19 @@ await cargarDatosUsuario(usuarioActual.id);
  <p style={{ margin: 0, color: MUTED }}>Negocio actual: {business?.negocio || configNegocio || "CREDI YA"}</p>
  </div>
  )}
-
+<label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+  <input
+    type="checkbox"
+    checked={localStorage.getItem(SESSION_PERSIST_KEY) === "true"}
+    onChange={(e) =>
+      localStorage.setItem(
+        SESSION_PERSIST_KEY,
+        e.target.checked ? "true" : "false"
+      )
+    }
+  />
+  Mantener sesión iniciada
+</label>
  {loading ? <p style={{ color: MUTED, margin: 0 }}>Cargando...</p> : null}
  </div>
  </div>
