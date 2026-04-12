@@ -1364,7 +1364,14 @@ await cargarDatosUsuario(usuarioActual.id);
       ) : (
         prestamosFiltrados.map((p) => (
           <div key={p.id} style={{ ...cardStyle(), display: "grid", gap: 8 }}>
-            <strong>{p.cliente?.nombre || "Cliente"}</strong>
+           <strong style={{
+  color: "#111",
+  fontSize: 18,
+  fontWeight: "700",
+  letterSpacing: 0.3
+}}>
+  {p.cliente?.nombre || "Cliente"}
+</strong>
 
             <div
               style={{
