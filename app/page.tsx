@@ -152,26 +152,28 @@ function buttonStyle(primary = false): CSSProperties {
 }
 
 function badgeColor(value: string) {
- if (value === "AL DIA" || value === "AL DÍA" || value === "PAGADA") return SUCCESS;
+ if (value === "ACTIVO" || value === "AL DÍA" || value === "PAGADA") return SUCCESS;
  if (value === "COBRAR HOY" || value === "PARCIAL") return WARNING;
- if (value === "VENCIDA" || value === "VENCIDO" || value === "MOROSO") return DANGER;
+ if (value === "MOROSO" || value === "VENCIDO" || value === "MOROSO") return DANGER;
  if (value === "PAGADO") return INFO;
  return TEXT;
 }
 
 function badgeStyle(color: string): CSSProperties {
- return {
- display: "inline-flex",
- alignItems: "center",
- width: "fit-content",
- padding: "6px 10px",
- borderRadius: 999,
- border: `1px solid ${BORDER}`,
- background: "#f8fafc",
- color,
- fontWeight: 700,
- fontSize: 13,
- };
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "fit-content",
+    padding: "7px 12px",
+    borderRadius: 999,
+    border: `1px solid ${color}`,
+    background: "#ffffff",
+    color,
+    fontWeight: 800,
+    fontSize: 13,
+    letterSpacing: 0.3,
+  };
 }
 
 function todayMid(dateISO: string) {
@@ -932,7 +934,7 @@ await cargarDatosUsuario(usuarioActual.id);
  const saldoReal = Number((saldoBase + mora).toFixed(2));
  const tieneVencidas = cuotasLista.some((c) => c.fecha < todayISO() && Number(c.restante || 0) > 0);
  const tieneHoy = cuotasLista.some((c) => c.fecha === todayISO() && Number(c.restante || 0) > 0);
- const estadoReal = saldoBase <= 0 ? "PAGADO" : tieneVencidas ? "VENCIDO" : tieneHoy ? "COBRAR HOY" : "AL DÍA";
+ const estadoReal = saldoBase <= 0 ? "PAGADO" : tieneVencidas ? "MOROSO" : tieneHoy ? "COBRAR HOY" : "ACTIVO";
  return {
  ...p,
  cliente: clienteById.get(p.client_id) || null,
