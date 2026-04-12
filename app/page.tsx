@@ -1066,16 +1066,64 @@ await cargarDatosUsuario(usuarioActual.id);
  }
 
  return (
- <div style={{ minHeight: "100vh", background: BG, padding: 16 }}>
+  <div style={{ minHeight: "100vh", background: BG, padding: 16, paddingBottom: 90 }}>
  <div style={{ maxWidth: 1180, margin: "0 auto", display: "grid", gap: 16 }}>
  <div style={{ ...cardStyle(), display: "grid", gap: 16 }}>
  <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
  <div style={{ display: "grid", gap: 6 }}>
  <h1 style={{ margin: 0, fontSize: 34, color: TEXT }}>{configNegocio || business?.negocio || "CREDI YA"}</h1>
  <p style={{ margin: 0, color: MUTED }}>Usuario: {usuarioActual.nombre || usuarioActual.usuario}</p>
+ <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+ {usuarioActual && (
+  <div
+    style={{
+      position: "fixed",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "#ffffff",
+      borderTop: `1px solid ${BORDER}`,
+      display: "flex",
+      justifyContent: "space-around",
+      gap: 8,
+      padding: "10px 12px",
+      zIndex: 999,
+      boxShadow: "0 -4px 12px rgba(0,0,0,0.06)",
+    }}
+  >
+    <button
+      style={buttonStyle(screen === "dashboard")}
+      onClick={() => setScreen("dashboard")}
+    >
+      Inicio
+    </button>
+
+    <button
+      style={buttonStyle(screen === "clientes")}
+      onClick={() => setScreen("clientes")}
+    >
+      Clientes
+    </button>
+
+    <button
+      style={buttonStyle(screen === "cobros")}
+      onClick={() => setScreen("cobros")}
+    >
+      Cobros
+    </button>
+
+    <button
+      style={buttonStyle(screen === "pagos")}
+      onClick={() => setScreen("pagos")}
+    >
+      Pagos
+    </button>
+  </div>
+)}
  </div>
 
- <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+
+ 
  <NavBtn to="dashboard" label="Dashboard" screen={screen} setScreen={setScreen} />
  <NavBtn to="clientes" label="Clientes" screen={screen} setScreen={setScreen} />
  <NavBtn to="prestamos" label="Préstamos" screen={screen} setScreen={setScreen} />
