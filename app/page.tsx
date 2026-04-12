@@ -273,10 +273,10 @@ const NavBtn = ({ to, label, screen, setScreen }: { to: Screen; label: string; s
 
 export default function App() {
  const [screen, setScreen] = useState<Screen>("login");
-
+const [prestamoPlanSemanal, setPrestamoPlanSemanal] = useState("4");
  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
  const [usuarioActual, setUsuarioActual] = useState<Usuario | null>(null);
-
+const [prestamoPlanMensual, setPrestamoPlanMensual] = useState("1");
  const [usuarioLogin, setUsuarioLogin] = useState("");
  const [passwordLogin, setPasswordLogin] = useState("");
 
@@ -1277,11 +1277,13 @@ await cargarDatosUsuario(usuarioActual.id);
             if (nuevaFrecuencia === "DIARIO") {
               setPrestamoPlanDiario("20");
               setPrestamoCuotas("20");
-            } else if (nuevaFrecuencia === "SEMANAL") {
-              setPrestamoCuotas("4");
-            } else if (nuevaFrecuencia === "MENSUAL") {
-              setPrestamoCuotas("1");
-            }
+            } if (nuevaFrecuencia === "SEMANAL") {
+  setPrestamoPlanSemanal("4");
+  setPrestamoCuotas("4");
+}  else if (nuevaFrecuencia === "MENSUAL") {
+  setPrestamoPlanMensual("1");
+  setPrestamoCuotas("1");
+}
           }}
         >
           <option value="DIARIO">DIARIO</option>
@@ -1304,7 +1306,36 @@ await cargarDatosUsuario(usuarioActual.id);
             <option value="30">30 días</option>
           </select>
         )}
-
+{prestamoFrecuencia === "SEMANAL" && (
+  <select
+    style={inputStyle()}
+    value={prestamoPlanSemanal}
+    onChange={(e) => {
+      const semanas = e.target.value;
+      setPrestamoPlanSemanal(semanas);
+      setPrestamoCuotas(semanas);
+    }}
+  >
+    <option value="4">4 semanas</option>
+    <option value="6">6 semanas</option>
+    <option value="8">8 semanas</option>
+  </select>
+)}
+{prestamoFrecuencia === "MENSUAL" && (
+  <select
+    style={inputStyle()}
+    value={prestamoPlanMensual}
+    onChange={(e) => {
+      const meses = e.target.value;
+      setPrestamoPlanMensual(meses);
+      setPrestamoCuotas(meses);
+    }}
+  >
+    <option value="1">1 mes</option>
+    <option value="2">2 meses</option>
+    <option value="3">3 meses</option>
+  </select>
+)}
         <input
           style={inputStyle()}
           placeholder="Número de cuotas"
