@@ -80,12 +80,13 @@ type Pago = {
 };
 
 type BusinessSettings = {
-  id?: string;
-  usuario_id?: string;
-  negocio?: string;
-  logo_base64?: string;
-  interes_mora_diario?: number;
-  moneda?: string;
+ id?: string;
+ usuario_id?: string;
+ negocio?: string;
+ logo_base64?: string;
+ interes_mora_diario?: number;
+ interes_prestamo?: number;
+ moneda?: string;
 };
 
 type PrestamoReal = Prestamo & {
@@ -107,11 +108,11 @@ const SUCCESS = "#15803d";
 const WARNING = "#d97706";
 const DANGER = "#dc2626";
 const INFO = "#2563eb";
+
 const SESSION_KEY = "crediya_usuario_actual";
 const SESSION_PERSIST_KEY = "crediya_recordar_sesion";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-
 
 function cardStyle(): CSSProperties {
  return {
@@ -151,26 +152,26 @@ function buttonStyle(primary = false): CSSProperties {
 function badgeColor(value: string) {
  if (value === "ACTIVO" || value === "AL DÍA" || value === "PAGADA") return SUCCESS;
  if (value === "COBRAR HOY" || value === "PARCIAL") return WARNING;
- if (value === "MOROSO" || value === "VENCIDO" || value === "MOROSO") return DANGER;
+ if (value === "MOROSO" || value === "VENCIDA" || value === "VENCIDO") return DANGER;
  if (value === "PAGADO") return INFO;
  return TEXT;
 }
 
 function badgeStyle(color: string): CSSProperties {
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "fit-content",
-    padding: "7px 12px",
-    borderRadius: 999,
-    border: `1px solid ${color}`,
-    background: "#ffffff",
-    color,
-    fontWeight: 800,
-    fontSize: 13,
-    letterSpacing: 0.3,
-  };
+ return {
+ display: "inline-flex",
+ alignItems: "center",
+ justifyContent: "center",
+ width: "fit-content",
+ padding: "7px 12px",
+ borderRadius: 999,
+ border: `1px solid ${color}`,
+ background: "#ffffff",
+ color,
+ fontWeight: 800,
+ fontSize: 13,
+ letterSpacing: 0.3,
+ };
 }
 
 function todayMid(dateISO: string) {
@@ -178,7 +179,9 @@ function todayMid(dateISO: string) {
 }
 
 function daysLate(fecha: string) {
- const diff = Math.floor((todayMid(todayISO()) - todayMid(fecha)) / (1000 * 60 * 60 * 24));
+ const diff = Math.floor(
+ (todayMid(todayISO()) - todayMid(fecha)) / (1000 * 60 * 60 * 24)
+ );
  return diff > 0 ? diff : 0;
 }
 
@@ -194,18 +197,6 @@ function calcularMora(fecha: string, restante: number, interesMoraDiario: number
 function addDays(dateISO: string, days: number) {
  const d = new Date(`${dateISO}T12:00:00`);
  d.setDate(d.getDate() + days);
- return d.toISOString().slice(0, 10);
-}
-
-function addBusinessDays(dateISO: string, businessDays: number) {
- const d = new Date(`${dateISO}T12:00:00`);
- let added = 0;
- while (added < businessDays) {
- if (added === 0) break;
- d.setDate(d.getDate() + 1);
- const day = d.getDay();
- if (day !== 0 && day !== 6) added += 1;
- }
  return d.toISOString().slice(0, 10);
 }
 
@@ -243,57 +234,60 @@ function fileToBase64(file: File) {
  });
 }
 
-const SectionTitle = ({ title, subtitle }: { title: string; subtitle?: string }) => (
+const SectionTitle = ({
+ title,
+ subtitle,
+}: {
+ title: string;
+ subtitle?: string;
+}) => (
  <div style={{ display: "grid", gap: 4 }}>
  <h2 style={{ margin: 0, color: TEXT }}>{title}</h2>
  {subtitle ? <p style={{ margin: 0, color: MUTED }}>{subtitle}</p> : null}
  </div>
 );
 
-const MetricCard = ({ title, value, danger = false }: { title: string; value: string | number; danger?: boolean }) => (
+const MetricCard = ({
+ title,
+ value,
+ danger = false,
+}: {
+ title: string;
+ value: string | number;
+ danger?: boolean;
+}) => (
  <div style={cardStyle()}>
  <p style={{ margin: 0, color: MUTED }}>{title}</p>
- <h3 style={{ margin: "10px 0 0", fontSize: 30, color: danger ? DANGER : TEXT }}>{value}</h3>
- </div>
-);
-
-const NavBtn = ({ to, label, screen, setScreen }: { to: Screen; label: string; screen: Screen; setScreen: (v: Screen) => void }) => (
- <button
+ <h3
  style={{
- ...buttonStyle(screen === to),
- background: screen === to ? PRIMARY : "#fff",
- color: screen === to ? "#fff" : TEXT,
+ margin: "10px 0 0",
+ fontSize: 30,
+ color: danger ? DANGER : TEXT,
  }}
- onClick={() => setScreen(to)}
  >
- {label}
- </button>
+ {value}
+ </h3>
+ </div>
 );
 
 export default function App() {
  const [screen, setScreen] = useState<Screen>("login");
-const [prestamoPlanSemanal, setPrestamoPlanSemanal] = useState("4");
+
  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
  const [usuarioActual, setUsuarioActual] = useState<Usuario | null>(null);
-const [prestamoPlanMensual, setPrestamoPlanMensual] = useState("1");
+
  const [usuarioLogin, setUsuarioLogin] = useState("");
  const [passwordLogin, setPasswordLogin] = useState("");
+ const [mantenerSesion, setMantenerSesion] = useState(false);
 
  const [clientes, setClientes] = useState<Cliente[]>([]);
  const [prestamos, setPrestamos] = useState<Prestamo[]>([]);
  const [cuotas, setCuotas] = useState<Cuota[]>([]);
  const [pagos, setPagos] = useState<Pago[]>([]);
  const [business, setBusiness] = useState<BusinessSettings | null>(null);
-const formatMoney = (
-  n: number,
-  currency = business?.moneda || "EUR",
-  locale = "es-ES"
-) =>
-  new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency,
-  }).format(Number(n || 0));
+
  const [loading, setLoading] = useState(false);
+
  const [busquedaClientes, setBusquedaClientes] = useState("");
  const [busquedaPrestamos, setBusquedaPrestamos] = useState("");
  const [busquedaCobros, setBusquedaCobros] = useState("");
@@ -315,12 +309,17 @@ const formatMoney = (
 
  const [prestamoClienteId, setPrestamoClienteId] = useState("");
  const [prestamoMonto, setPrestamoMonto] = useState("");
- const [prestamoInteres, setPrestamoInteres] = useState("0.15");
- const [prestamoFrecuencia, setPrestamoFrecuencia] = useState<"DIARIO" | "SEMANAL" | "MENSUAL">("DIARIO");
+ const [prestamoFrecuencia, setPrestamoFrecuencia] =
+ useState<"DIARIO" | "SEMANAL" | "MENSUAL">("DIARIO");
  const [prestamoCuotas, setPrestamoCuotas] = useState("20");
  const [prestamoFechaInicio, setPrestamoFechaInicio] = useState(todayISO());
-const [prestamoPlanDiario, setPrestamoPlanDiario] = useState("20");
- const [selectedCobroCuotaId, setSelectedCobroCuotaId] = useState<string | null>(null);
+ const [prestamoPlanDiario, setPrestamoPlanDiario] = useState("20");
+ const [prestamoPlanSemanal, setPrestamoPlanSemanal] = useState("4");
+ const [prestamoPlanMensual, setPrestamoPlanMensual] = useState("1");
+
+ const [selectedCobroCuotaId, setSelectedCobroCuotaId] = useState<string | null>(
+ null
+ );
  const [pagoMonto, setPagoMonto] = useState("");
  const [pagoMetodo, setPagoMetodo] = useState("EFECTIVO");
  const [pagoFecha, setPagoFecha] = useState(todayISO());
@@ -332,51 +331,82 @@ const [prestamoPlanDiario, setPrestamoPlanDiario] = useState("20");
 
  const [configNegocio, setConfigNegocio] = useState("CREDI YA");
  const [configInteresMora, setConfigInteresMora] = useState("0.01");
+ const [configInteresPrestamo, setConfigInteresPrestamo] = useState("0.15");
  const [configLogoBase64, setConfigLogoBase64] = useState("");
-const [configMoneda, setConfigMoneda] = useState("EUR");
+ const [configMoneda, setConfigMoneda] = useState("EUR");
+
+ const formatMoney = (
+ n: number,
+ currency = business?.moneda || configMoneda || "EUR",
+ locale = "es-ES"
+ ) =>
+ new Intl.NumberFormat(locale, {
+ style: "currency",
+ currency,
+ }).format(Number(n || 0));
 
  useEffect(() => {
  void cargarUsuarios();
- const raw = localStorage.getItem(SESSION_KEY);
- if (!raw) return;
+
+ const persist = localStorage.getItem(SESSION_PERSIST_KEY) === "true";
+ setMantenerSesion(persist);
+
+ const saved = persist
+ ? localStorage.getItem(SESSION_KEY)
+ : sessionStorage.getItem(SESSION_KEY);
+
+ if (!saved) return;
+
  try {
- const user = JSON.parse(raw) as Usuario;
+ const user = JSON.parse(saved) as Usuario;
  setUsuarioActual(user);
  setScreen("dashboard");
  } catch {
  localStorage.removeItem(SESSION_KEY);
+ sessionStorage.removeItem(SESSION_KEY);
  }
  }, []);
 
  useEffect(() => {
-  if (!usuarioActual?.id) return;
-
-  void cargarDatosUsuario(usuarioActual.id);
-  void cargarBusiness(usuarioActual.id);
-}, [usuarioActual?.id]);
+ if (!usuarioActual?.id) return;
+ void cargarDatosUsuario(usuarioActual.id);
+ void cargarBusiness(usuarioActual.id);
+ }, [usuarioActual?.id]);
 
  async function cargarUsuarios() {
- const { data, error } = await supabase.from("usuarios_app").select("*").order("created_at", { ascending: true });
+ const { data, error } = await supabase
+ .from("usuarios_app")
+ .select("*")
+ .order("created_at", { ascending: true });
+
  if (error) {
  alert(`Error cargando usuarios: ${error.message}`);
  return;
  }
+
  setUsuarios((data || []) as Usuario[]);
  }
 
  async function cargarBusiness(usuarioId: string) {
- const { data } = await supabase.from("business_settings").select("*").eq("usuario_id", usuarioId).maybeSingle();
+ const { data } = await supabase
+ .from("business_settings")
+ .select("*")
+ .eq("usuario_id", usuarioId)
+ .maybeSingle();
+
  if (data) {
  const cfg = data as BusinessSettings;
  setBusiness(cfg);
  setConfigNegocio(cfg.negocio || "CREDI YA");
  setConfigInteresMora(String(cfg.interes_mora_diario ?? 0.01));
+ setConfigInteresPrestamo(String(cfg.interes_prestamo ?? 0.15));
  setConfigLogoBase64(cfg.logo_base64 || "");
  setConfigMoneda(cfg.moneda || "EUR");
  } else {
  setBusiness(null);
  setConfigNegocio("CREDI YA");
  setConfigInteresMora("0.01");
+ setConfigInteresPrestamo("0.15");
  setConfigLogoBase64("");
  setConfigMoneda("EUR");
  }
@@ -384,26 +414,38 @@ const [configMoneda, setConfigMoneda] = useState("EUR");
 
  async function guardarBusiness() {
  if (!usuarioActual?.id) return;
+
  const payload = {
  usuario_id: usuarioActual.id,
  negocio: configNegocio || "CREDI YA",
  logo_base64: configLogoBase64 || "",
  interes_mora_diario: Number(configInteresMora || 0.01),
- moneda: configMoneda || "EUR"
+ interes_prestamo: Number(configInteresPrestamo || 0.15),
+ moneda: configMoneda || "EUR",
  };
 
  if (business?.id) {
- const { error } = await supabase.from("business_settings").update(payload).eq("id", business.id);
+ const { error } = await supabase
+ .from("business_settings")
+ .update(payload)
+ .eq("id", business.id);
+
  if (error) {
  alert(`Error guardando configuración: ${error.message}`);
  return;
  }
  } else {
- const { data, error } = await supabase.from("business_settings").insert([payload]).select().maybeSingle();
+ const { data, error } = await supabase
+ .from("business_settings")
+ .insert([payload])
+ .select()
+ .maybeSingle();
+
  if (error) {
  alert(`Error guardando configuración: ${error.message}`);
  return;
  }
+
  if (data) setBusiness(data as BusinessSettings);
  }
 
@@ -429,9 +471,19 @@ const [configMoneda, setConfigMoneda] = useState("EUR");
  alert(`Error en login: ${error.message}`);
  return;
  }
+
  if (!data) {
  alert("Usuario o contraseña incorrectos");
  return;
+ }
+
+ localStorage.removeItem(SESSION_KEY);
+ sessionStorage.removeItem(SESSION_KEY);
+
+ if (mantenerSesion) {
+ localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+ } else {
+ sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
  }
 
  setUsuarioActual(data as Usuario);
@@ -441,12 +493,17 @@ const [configMoneda, setConfigMoneda] = useState("EUR");
  async function crearUsuarioRapido() {
  const nombre = prompt("Nombre del usuario");
  if (!nombre) return;
+
  const usuario = prompt("Usuario");
  if (!usuario) return;
+
  const password = prompt("Contraseña");
  if (!password) return;
 
- const { error } = await supabase.from("usuarios_app").insert([{ nombre, usuario, password, activo: true }]);
+ const { error } = await supabase
+ .from("usuarios_app")
+ .insert([{ nombre, usuario, password, activo: true }]);
+
  if (error) {
  alert(`Error creando usuario: ${error.message}`);
  return;
@@ -458,6 +515,7 @@ const [configMoneda, setConfigMoneda] = useState("EUR");
 
  function cerrarSesion() {
  localStorage.removeItem(SESSION_KEY);
+ sessionStorage.removeItem(SESSION_KEY);
  setUsuarioActual(null);
  setUsuarioLogin("");
  setPasswordLogin("");
@@ -472,11 +530,28 @@ const [configMoneda, setConfigMoneda] = useState("EUR");
 
  async function cargarDatosUsuario(usuarioId: string) {
  setLoading(true);
+
  const [clientesRes, prestamosRes, cuotasRes, pagosRes] = await Promise.all([
- supabase.from("clientes").select("*").eq("usuario_id", usuarioId).order("created_at", { ascending: false }),
- supabase.from("prestamos").select("*").eq("usuario_id", usuarioId).order("created_at", { ascending: false }),
- supabase.from("cuotas").select("*").eq("usuario_id", usuarioId).order("numero", { ascending: true }),
- supabase.from("pagos").select("*").eq("usuario_id", usuarioId).order("created_at", { ascending: false }),
+ supabase
+ .from("clientes")
+ .select("*")
+ .eq("usuario_id", usuarioId)
+ .order("created_at", { ascending: false }),
+ supabase
+ .from("prestamos")
+ .select("*")
+ .eq("usuario_id", usuarioId)
+ .order("created_at", { ascending: false }),
+ supabase
+ .from("cuotas")
+ .select("*")
+ .eq("usuario_id", usuarioId)
+ .order("numero", { ascending: true }),
+ supabase
+ .from("pagos")
+ .select("*")
+ .eq("usuario_id", usuarioId)
+ .order("created_at", { ascending: false }),
  ]);
 
  if (clientesRes.error) return alert(`Error cargando clientes: ${clientesRes.error.message}`);
@@ -520,7 +595,11 @@ const [configMoneda, setConfigMoneda] = useState("EUR");
  };
 
  if (editingClienteId) {
- const { error } = await supabase.from("clientes").update(payload).eq("id", editingClienteId);
+ const { error } = await supabase
+ .from("clientes")
+ .update(payload)
+ .eq("id", editingClienteId);
+
  if (error) return alert(`Error actualizando cliente: ${error.message}`);
  alert("Cliente actualizado");
  } else {
@@ -550,12 +629,15 @@ const [configMoneda, setConfigMoneda] = useState("EUR");
 
  async function eliminarCliente(clienteId: string) {
  if (!confirm("¿Seguro que quieres borrar este cliente?")) return;
+
  const { error } = await supabase.from("clientes").delete().eq("id", clienteId);
  if (error) return alert(`Error borrando cliente: ${error.message}`);
+
  if (selectedClienteId === clienteId) {
  setSelectedClienteId(null);
  setScreen("clientes");
  }
+
  if (usuarioActual?.id) void cargarDatosUsuario(usuarioActual.id);
  }
 
@@ -565,7 +647,7 @@ const [configMoneda, setConfigMoneda] = useState("EUR");
  if (!prestamoMonto) return alert("Ingresa monto");
 
  const monto = Number(prestamoMonto || 0);
- const interes = Number(prestamoInteres || 0.15);
+ const interes = Number(configInteresPrestamo || business?.interes_prestamo || 0.15);
  const cuotasCount = Number(prestamoCuotas || 0);
  const frecuencia = prestamoFrecuencia;
  const fechaInicio = prestamoFechaInicio || todayISO();
@@ -588,7 +670,7 @@ const [configMoneda, setConfigMoneda] = useState("EUR");
  total,
  cuota: valorCuota,
  saldo: total,
- estado: frecuencia === "DIARIO" ? "COBRAR HOY" : "AL DÍA",
+ estado: frecuencia === "DIARIO" ? "COBRAR HOY" : "ACTIVO",
  fecha_inicio: fechaInicio,
  },
  ])
@@ -605,6 +687,7 @@ const [configMoneda, setConfigMoneda] = useState("EUR");
  if (frecuencia === "DIARIO") fecha = nextBusinessDate(fechaInicio, i);
  if (frecuencia === "SEMANAL") fecha = addDays(fechaInicio, (i + 1) * 7);
  if (frecuencia === "MENSUAL") fecha = addMonths(fechaInicio, i + 1);
+
  return {
  usuario_id: usuarioActual.id,
  prestamo_id: prestamoCreado.id,
@@ -613,11 +696,12 @@ const [configMoneda, setConfigMoneda] = useState("EUR");
  monto: valorCuota,
  pagado: 0,
  restante: valorCuota,
- estado: fecha < todayISO() ? "VENCIDA" : fecha === todayISO() ? "PENDIENTE" : "PENDIENTE",
+ estado: fecha < todayISO() ? "VENCIDA" : "PENDIENTE",
  };
  });
 
  const { error: cuotasError } = await supabase.from("cuotas").insert(cuotasInsert);
+
  if (cuotasError) {
  alert(`Error creando cuotas: ${cuotasError.message}`);
  return;
@@ -626,295 +710,322 @@ const [configMoneda, setConfigMoneda] = useState("EUR");
  alert("Préstamo creado");
  setPrestamoClienteId("");
  setPrestamoMonto("");
- setPrestamoInteres("0.15");
  setPrestamoFrecuencia("DIARIO");
  setPrestamoCuotas("20");
+ setPrestamoPlanDiario("20");
+ setPrestamoPlanSemanal("4");
+ setPrestamoPlanMensual("1");
  setPrestamoFechaInicio(todayISO());
  setMostrarFormPrestamo(false);
  void cargarDatosUsuario(usuarioActual.id);
  }
 
  function generarReciboPDF(args: {
-  cliente: Cliente | null;
-  prestamo: Prestamo | undefined;
-  monto: number;
-  fecha: string;
-  metodo: string;
-  nota: string;
-  mora: number;
-  saldo: number;
-  cuotasPendientes: number;
-  cuotasPagadas: number;
-  cuotaActual: number;
-  cuotasTotales: number;
-  montoPrestamo: number;
-  totalPrestamo: number;
-  frecuencia: string;
-}) {
-  const doc = new jsPDF();
+ cliente: Cliente | null;
+ prestamo: Prestamo | undefined;
+ monto: number;
+ fecha: string;
+ metodo: string;
+ nota: string;
+ mora: number;
+ saldo: number;
+ cuotasPendientes: number;
+ cuotasPagadas: number;
+ cuotaActual: number;
+ cuotasTotales: number;
+ montoPrestamo: number;
+ totalPrestamo: number;
+ frecuencia: string;
+ }) {
+ const doc = new jsPDF();
+ const negocio = business?.negocio || "CREDI YA";
+ const estado = args.saldo <= 0 ? "PAZ Y SALVO" : "DEUDA ACTIVA";
 
-  const negocio = business?.negocio || "CREDI YA";
-  const estado = args.saldo <= 0 ? "PAZ Y SALVO" : "DEUDA ACTIVA";
+ let y = 20;
 
-  let y = 20;
+ try {
+ if (business?.logo_base64) {
+ doc.addImage(business.logo_base64, "PNG", 20, 12, 32, 18);
+ }
+ } catch {}
 
-  try {
-    if (business?.logo_base64) {
-      doc.addImage(business.logo_base64, "PNG", 20, 12, 32, 18);
-    }
-  } catch (e) {
-    // si el logo falla, el PDF sigue normal
-  }
+ doc.setFont("helvetica", "bold");
+ doc.setFontSize(18);
+ doc.text(negocio, 60, 20);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text(negocio, 60, 20);
+ doc.setFont("helvetica", "normal");
+ doc.setFontSize(11);
+ doc.text("Recibo profesional de pago", 60, 28);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text("Recibo profesional de pago", 60, 28);
+ y = 42;
+ doc.setDrawColor(200, 200, 200);
+ doc.line(20, y, 190, y);
+ y += 10;
 
-  y = 42;
+ const line = (label: string, value: string, bold = false) => {
+ doc.setFont("helvetica", bold ? "bold" : "normal");
+ doc.text(`${label}: ${value}`, 20, y);
+ y += 8;
+ };
 
-  doc.setDrawColor(200, 200, 200);
-  doc.line(20, y, 190, y);
-  y += 10;
+ line("Cliente", args.cliente?.nombre || "Cliente", true);
+ line("Documento", args.cliente?.documento || "No registrado");
+ line("Teléfono", args.cliente?.telefono || "-");
+ line("Fecha", args.fecha);
 
-  const line = (label: string, value: string, bold = false) => {
-    doc.setFont("helvetica", bold ? "bold" : "normal");
-    doc.text(`${label}: ${value}`, 20, y);
-    y += 8;
-  };
+ y += 4;
+ doc.line(20, y, 190, y);
+ y += 10;
 
-  line("Cliente", args.cliente?.nombre || "Cliente", true);
-  line("Documento", args.cliente?.documento || "No registrado");
-  line("Teléfono", args.cliente?.telefono || "-");
-  line("Fecha", args.fecha);
+ doc.setFont("helvetica", "bold");
+ doc.text("Detalle del préstamo", 20, y);
+ y += 8;
 
-  y += 4;
-  doc.line(20, y, 190, y);
-  y += 10;
+ line("Préstamo entregado", formatMoney(args.montoPrestamo));
+ line("Total del préstamo", formatMoney(args.totalPrestamo));
+ line("Frecuencia", args.frecuencia);
+ line("Estado actual", estado, true);
+ line("Deuda activa", formatMoney(args.saldo), true);
+ line("Mora acumulada", formatMoney(args.mora));
 
-  doc.setFont("helvetica", "bold");
-  doc.text("Detalle del préstamo", 20, y);
-  y += 8;
+ y += 4;
+ doc.line(20, y, 190, y);
+ y += 10;
 
-  line("Préstamo entregado", formatMoney(args.montoPrestamo));
-line("Total del préstamo", formatMoney(args.totalPrestamo));
-line("Frecuencia", args.frecuencia);
-line("Estado actual", estado, true);
-  line("Deuda activa", formatMoney(args.saldo), true);
-  line("Mora acumulada", formatMoney(args.mora));
+ doc.setFont("helvetica", "bold");
+ doc.text("Detalle de cuotas", 20, y);
+ y += 8;
 
-  y += 4;
-  doc.line(20, y, 190, y);
-  y += 10;
+ line("Cuota pagada", `Cuota ${args.cuotaActual}`);
+ line("Cuotas pagadas", String(args.cuotasPagadas));
+ line("Cuotas pendientes", String(args.cuotasPendientes));
+ line("Total cuotas", String(args.cuotasTotales));
 
-  doc.setFont("helvetica", "bold");
-  doc.text("Detalle de cuotas", 20, y);
-  y += 8;
+ y += 4;
+ doc.line(20, y, 190, y);
+ y += 10;
 
-  line("Cuota pagada", `Cuota ${args.cuotaActual}`);
-  line("Cuotas pagadas", String(args.cuotasPagadas));
-  line("Cuotas pendientes", String(args.cuotasPendientes));
-  line("Total cuotas", String(args.cuotasTotales));
+ doc.setFont("helvetica", "bold");
+ doc.text("Detalle del pago", 20, y);
+ y += 8;
 
-  y += 4;
-  doc.line(20, y, 190, y);
-  y += 10;
+ line("Monto pagado", formatMoney(args.monto), true);
+ line("Método", args.metodo);
+ line("Nota", args.nota || "-");
 
-  doc.setFont("helvetica", "bold");
-  doc.text("Detalle del pago", 20, y);
-  y += 8;
+ y += 8;
+ doc.setFont("helvetica", "italic");
+ doc.setFontSize(10);
+ doc.text(
+ estado === "PAZ Y SALVO"
+ ? "Comprobante generado: cliente al día y sin saldo pendiente."
+ : "Comprobante generado: pago aplicado correctamente al préstamo.",
+ 20,
+ y
+ );
 
-  line("Monto pagado", formatMoney(args.monto), true);
-  line("Método", args.metodo);
-  line("Nota", args.nota || "-");
+ doc.save(
+ `recibo-${(args.cliente?.nombre || "cliente")
+ .replace(/\s+/g, "-")
+ .toLowerCase()}.pdf`
+ );
+ }
 
-  y += 8;
+ async function recalcularPrestamo(prestamoId: string) {
+ const { data, error } = await supabase
+ .from("cuotas")
+ .select("*")
+ .eq("prestamo_id", prestamoId)
+ .order("numero", { ascending: true });
 
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(10);
-  doc.text(
-    estado === "PAZ Y SALVO"
-      ? "Comprobante generado: cliente al día y sin saldo pendiente."
-      : "Comprobante generado: pago aplicado correctamente al préstamo.",
-    20,
-    y
-  );
+ if (error) {
+ alert("Error recargando cuotas: " + error.message);
+ return;
+ }
 
-  doc.save(
-    `recibo-${(args.cliente?.nombre || "cliente")
-      .replace(/\\s+/g, "-")
-      .toLowerCase()}.pdf`
-  );
-}
-async function recalcularPrestamo(prestamoId: string) {
-  const cuotasPrestamo = cuotas
-    .filter((c) => c.prestamo_id === prestamoId)
-    .sort((a, b) => Number(a.numero || 0) - Number(b.numero || 0));
+ const cuotasPrestamo = (data || []) as Cuota[];
 
-  const saldoBase = cuotasPrestamo.reduce(
-    (acc, c) => acc + Number(c.restante || 0),
-    0
-  );
+ const saldoBase = cuotasPrestamo.reduce(
+ (acc, c) => acc + Number(c.restante || 0),
+ 0
+ );
 
-  const mora = cuotasPrestamo.reduce(
-    (acc, c) =>
-      acc +
-      calcularMora(
-        c.fecha,
-        Number(c.restante || 0),
-        Number(business?.interes_mora_diario || 0.01)
-      ),
-    0
-  );
+ const mora = cuotasPrestamo.reduce(
+ (acc, c) =>
+ acc +
+ calcularMora(
+ c.fecha,
+ Number(c.restante || 0),
+ Number(business?.interes_mora_diario || 0.01)
+ ),
+ 0
+ );
 
-  const saldoReal = Number((saldoBase + mora).toFixed(2));
+ const saldoReal = Number((saldoBase + mora).toFixed(2));
 
-  const tieneVencidas = cuotasPrestamo.some(
-    (c) => c.fecha < todayISO() && Number(c.restante || 0) > 0
-  );
+ const tieneVencidas = cuotasPrestamo.some(
+ (c) => c.fecha < todayISO() && Number(c.restante || 0) > 0
+ );
 
-  const tieneHoy = cuotasPrestamo.some(
-    (c) => c.fecha === todayISO() && Number(c.restante || 0) > 0
-  );
+ const tieneHoy = cuotasPrestamo.some(
+ (c) => c.fecha === todayISO() && Number(c.restante || 0) > 0
+ );
 
-  const estadoPrestamo =
-    saldoBase <= 0
-      ? "PAGADO"
-      : tieneVencidas
-      ? "VENCIDO"
-      : tieneHoy
-      ? "COBRAR HOY"
-      : "AL DÍA";
+ const estadoPrestamo =
+ saldoBase <= 0
+ ? "PAGADO"
+ : tieneVencidas
+ ? "MOROSO"
+ : tieneHoy
+ ? "COBRAR HOY"
+ : "ACTIVO";
 
-  const { error } = await supabase
-    .from("prestamos")
-    .update({
-      saldo: saldoReal,
-      estado: estadoPrestamo,
-    })
-    .eq("id", prestamoId);
+ const { error: updateError } = await supabase
+ .from("prestamos")
+ .update({
+ saldo: saldoReal,
+ estado: estadoPrestamo,
+ })
+ .eq("id", prestamoId);
 
-  if (error) {
-    alert("Error actualizando préstamo: " + error.message);
-  }
-}
+ if (updateError) {
+ alert("Error actualizando préstamo: " + updateError.message);
+ }
+ }
+
  async function registrarPago() {
  if (!usuarioActual?.id) return;
- if (!selectedCobroCuotaId) return alert("Selecciona una cuota a cobrar");
+ if (!selectedCobroCuotaId) return alert("Selecciona una cuota");
+
  const cuotaSeleccionada = cuotas.find((c) => c.id === selectedCobroCuotaId);
  if (!cuotaSeleccionada) return alert("Cuota no encontrada");
 
  const prestamo = prestamos.find((p) => p.id === cuotaSeleccionada.prestamo_id);
  if (!prestamo) return alert("Préstamo no encontrado");
+
  const cliente = clientes.find((c) => c.id === prestamo.client_id) || null;
 
- const montoAbono = Number(pagoMonto || 0);
- if (!montoAbono || montoAbono <= 0) return alert("Monto inválido");
+ let restantePorAplicar = Number(pagoMonto || 0);
+ if (!restantePorAplicar || restantePorAplicar <= 0) {
+ return alert("Monto inválido");
+ }
 
- const cuotasPrestamo = cuotas
+ const cuotasOrdenadas = cuotas
  .filter((c) => c.prestamo_id === prestamo.id && Number(c.restante || 0) > 0)
  .sort((a, b) => Number(a.numero || 0) - Number(b.numero || 0));
 
- let restantePorAplicar = montoAbono;
- for (const cuota of cuotasPrestamo) {
+ for (const cuota of cuotasOrdenadas) {
  if (restantePorAplicar <= 0) break;
- const restanteActual = Number(cuota.restante || 0);
- const pagadoActual = Number(cuota.pagado || 0);
- const abono = Math.min(restantePorAplicar, restanteActual);
- const nuevoPagado = pagadoActual + abono;
- const nuevoRestante = Number((restanteActual - abono).toFixed(2));
 
- let nuevoEstado = "PENDIENTE";
- if (nuevoRestante <= 0) nuevoEstado = "PAGADA";
- else if (nuevoPagado > 0) nuevoEstado = "PARCIAL";
- if (nuevoRestante > 0 && cuota.fecha < todayISO()) nuevoEstado = "VENCIDA";
+ const restanteActual = Number(cuota.restante || 0);
+ if (restanteActual <= 0) continue;
+
+ const moraActual = calcularMora(
+ cuota.fecha,
+ restanteActual,
+ Number(business?.interes_mora_diario || 0.01)
+ );
+
+ const pagoMora = Math.min(restantePorAplicar, moraActual);
+ restantePorAplicar = Number((restantePorAplicar - pagoMora).toFixed(2));
+
+ const abonoCapital = Math.min(restantePorAplicar, restanteActual);
+ const nuevoPagado = Number((Number(cuota.pagado || 0) + abonoCapital).toFixed(2));
+ const nuevoRestante = Number((restanteActual - abonoCapital).toFixed(2));
+
+ let estado = "PENDIENTE";
+ if (nuevoRestante <= 0) estado = "PAGADA";
+ else if (nuevoPagado > 0) estado = "PARCIAL";
+ if (nuevoRestante > 0 && cuota.fecha < todayISO()) estado = "VENCIDA";
 
  const { error } = await supabase
  .from("cuotas")
- .update({ pagado: nuevoPagado, restante: nuevoRestante, estado: nuevoEstado })
+ .update({
+ pagado: nuevoPagado,
+ restante: nuevoRestante,
+ estado,
+ })
  .eq("id", cuota.id);
+
  if (error) return alert(`Error actualizando cuota: ${error.message}`);
 
- restantePorAplicar = Number((restantePorAplicar - abono).toFixed(2));
+ restantePorAplicar = Number((restantePorAplicar - abonoCapital).toFixed(2));
  }
 
- const puntual = pagoFecha <= cuotaSeleccionada.fecha;
  const { error: pagoError } = await supabase.from("pagos").insert([
  {
  usuario_id: usuarioActual.id,
  prestamo_id: prestamo.id,
  fecha: pagoFecha,
- monto: montoAbono,
+ monto: Number(pagoMonto),
  metodo: pagoMetodo,
- puntual,
+ puntual: pagoFecha <= cuotaSeleccionada.fecha,
  nota: pagoNota,
  },
  ]);
+
  if (pagoError) return alert(`Error creando pago: ${pagoError.message}`);
 
  await recalcularPrestamo(prestamo.id);
 
-const { data: cuotasFresh, error: cuotasFreshError } = await supabase
-  .from("cuotas")
-  .select("*")
-  .eq("prestamo_id", prestamo.id)
-  .order("numero", { ascending: true });
+ const { data: cuotasFresh, error: cuotasFreshError } = await supabase
+ .from("cuotas")
+ .select("*")
+ .eq("prestamo_id", prestamo.id)
+ .order("numero", { ascending: true });
 
-if (cuotasFreshError) {
-  alert(`Error recargando cuotas: ${cuotasFreshError.message}`);
-  return;
-}
+ if (cuotasFreshError) {
+ alert(`Error recargando cuotas: ${cuotasFreshError.message}`);
+ return;
+ }
 
-const cuotasPrestamoActualizadas = (cuotasFresh || []) as Cuota[];
+ const cuotasPrestamoActualizadas = (cuotasFresh || []) as Cuota[];
 
-const saldoBase = cuotasPrestamoActualizadas.reduce(
-  (acc, c) => acc + Number(c.restante || 0),
-  0
-);
+ const saldoBase = cuotasPrestamoActualizadas.reduce(
+ (acc, c) => acc + Number(c.restante || 0),
+ 0
+ );
 
-const mora = cuotasPrestamoActualizadas.reduce(
-  (acc, c) =>
-    acc +
-    calcularMora(
-      c.fecha,
-      Number(c.restante || 0),
-      Number(business?.interes_mora_diario || 0.01)
-    ),
-  0
-);
+ const mora = cuotasPrestamoActualizadas.reduce(
+ (acc, c) =>
+ acc +
+ calcularMora(
+ c.fecha,
+ Number(c.restante || 0),
+ Number(business?.interes_mora_diario || 0.01)
+ ),
+ 0
+ );
 
-const saldoReal = Number((saldoBase + mora).toFixed(2));
+ const saldoReal = Number((saldoBase + mora).toFixed(2));
 
-const cuotasPendientes = cuotasPrestamoActualizadas.filter(
-  (c) => Number(c.restante || 0) > 0
-).length;
+ const cuotasPendientes = cuotasPrestamoActualizadas.filter(
+ (c) => Number(c.restante || 0) > 0
+ ).length;
 
-const cuotasPagadas = cuotasPrestamoActualizadas.filter(
-  (c) => Number(c.restante || 0) <= 0
-).length;
+ const cuotasPagadas = cuotasPrestamoActualizadas.filter(
+ (c) => Number(c.restante || 0) <= 0
+ ).length;
 
-generarReciboPDF({
-  cliente,
-  prestamo,
-  monto: montoAbono,
-  fecha: pagoFecha,
-  metodo: pagoMetodo,
-  nota: pagoNota,
-  mora,
-  saldo: saldoReal,
-  cuotasPendientes,
-  cuotasPagadas,
-  cuotaActual: Number(cuotaSeleccionada.numero || 0),
-  cuotasTotales: Number(prestamo.cuotas || 0),
-  montoPrestamo: Number(prestamo.monto || 0),
-  totalPrestamo: Number(prestamo.total || 0),
-  frecuencia:  prestamo?.frecuencia || "-",
-});
+ generarReciboPDF({
+ cliente,
+ prestamo,
+ monto: Number(pagoMonto),
+ fecha: pagoFecha,
+ metodo: pagoMetodo,
+ nota: pagoNota,
+ mora,
+ saldo: saldoReal,
+ cuotasPendientes,
+ cuotasPagadas,
+ cuotaActual: Number(cuotaSeleccionada.numero || 0),
+ cuotasTotales: Number(prestamo.cuotas || 0),
+ montoPrestamo: Number(prestamo.monto || 0),
+ totalPrestamo: Number(prestamo.total || 0),
+ frecuencia: prestamo.frecuencia || "-",
+ });
 
-await cargarDatosUsuario(usuarioActual.id);
+ await cargarDatosUsuario(usuarioActual.id);
 
  setPagoMonto("");
  setPagoMetodo("EFECTIVO");
@@ -922,8 +1033,8 @@ await cargarDatosUsuario(usuarioActual.id);
  setPagoNota("");
  setSelectedCobroCuotaId(null);
  setMostrarFormPago(false);
- alert("Pago registrado");
- await cargarDatosUsuario(usuarioActual.id);
+
+ alert("Pago registrado correctamente");
  }
 
  const clienteById = useMemo(() => {
@@ -934,16 +1045,45 @@ await cargarDatosUsuario(usuarioActual.id);
 
  const prestamosReales = useMemo<PrestamoReal[]>(() => {
  return prestamos.map((p) => {
- const cuotasLista = cuotas.filter((c) => c.prestamo_id === p.id).sort((a, b) => Number(a.numero || 0) - Number(b.numero || 0));
- const saldoBase = cuotasLista.reduce((acc, c) => acc + Number(c.restante || 0), 0);
- const mora = cuotasLista.reduce(
- (acc, c) => acc + calcularMora(c.fecha, Number(c.restante || 0), Number(business?.interes_mora_diario || 0.01)),
+ const cuotasLista = cuotas
+ .filter((c) => c.prestamo_id === p.id)
+ .sort((a, b) => Number(a.numero || 0) - Number(b.numero || 0));
+
+ const saldoBase = cuotasLista.reduce(
+ (acc, c) => acc + Number(c.restante || 0),
  0
  );
+
+ const mora = cuotasLista.reduce(
+ (acc, c) =>
+ acc +
+ calcularMora(
+ c.fecha,
+ Number(c.restante || 0),
+ Number(business?.interes_mora_diario || 0.01)
+ ),
+ 0
+ );
+
  const saldoReal = Number((saldoBase + mora).toFixed(2));
- const tieneVencidas = cuotasLista.some((c) => c.fecha < todayISO() && Number(c.restante || 0) > 0);
- const tieneHoy = cuotasLista.some((c) => c.fecha === todayISO() && Number(c.restante || 0) > 0);
- const estadoReal = saldoBase <= 0 ? "PAGADO" : tieneVencidas ? "MOROSO" : tieneHoy ? "COBRAR HOY" : "ACTIVO";
+
+ const tieneVencidas = cuotasLista.some(
+ (c) => c.fecha < todayISO() && Number(c.restante || 0) > 0
+ );
+
+ const tieneHoy = cuotasLista.some(
+ (c) => c.fecha === todayISO() && Number(c.restante || 0) > 0
+ );
+
+ const estadoReal =
+ saldoBase <= 0
+ ? "PAGADO"
+ : tieneVencidas
+ ? "MOROSO"
+ : tieneHoy
+ ? "COBRAR HOY"
+ : "ACTIVO";
+
  return {
  ...p,
  cliente: clienteById.get(p.client_id) || null,
@@ -958,12 +1098,20 @@ await cargarDatosUsuario(usuarioActual.id);
 
  const clientesFiltrados = useMemo(() => {
  const q = busquedaClientes.toLowerCase().trim();
- return clientes.filter((c) => `${c.nombre} ${c.telefono || ""} ${c.documento || ""} ${c.ruta || ""}`.toLowerCase().includes(q));
+ return clientes.filter((c) =>
+ `${c.nombre} ${c.telefono || ""} ${c.documento || ""} ${c.ruta || ""}`
+ .toLowerCase()
+ .includes(q)
+ );
  }, [clientes, busquedaClientes]);
 
  const prestamosFiltrados = useMemo(() => {
  const q = busquedaPrestamos.toLowerCase().trim();
- return prestamosReales.filter((p) => `${p.cliente?.nombre || ""} ${p.cliente?.telefono || ""} ${p.estadoReal}`.toLowerCase().includes(q));
+ return prestamosReales.filter((p) =>
+ `${p.cliente?.nombre || ""} ${p.cliente?.telefono || ""} ${p.estadoReal}`
+ .toLowerCase()
+ .includes(q)
+ );
  }, [prestamosReales, busquedaPrestamos]);
 
  const cobrosFiltrados = useMemo(() => {
@@ -989,13 +1137,24 @@ await cargarDatosUsuario(usuarioActual.id);
  return pagos.filter((p) => {
  const prestamo = prestamosReales.find((x) => x.id === p.prestamo_id);
  const cliente = prestamo?.cliente;
- return `${cliente?.nombre || ""} ${p.metodo || ""} ${p.fecha}`.toLowerCase().includes(q);
+ return `${cliente?.nombre || ""} ${p.metodo || ""} ${p.fecha}`
+ .toLowerCase()
+ .includes(q);
  });
  }, [pagos, prestamosReales, busquedaPagos]);
 
  const morosos = useMemo(() => {
  const q = busquedaMorosos.toLowerCase().trim();
- const map = new Map<string, { cliente: Cliente; totalVencido: number; totalMora: number; diasMax: number; cuotasVencidas: number }>();
+ const map = new Map<
+ string,
+ {
+ cliente: Cliente;
+ totalVencido: number;
+ totalMora: number;
+ diasMax: number;
+ cuotasVencidas: number;
+ }
+ >();
 
  cuotas
  .filter((c) => c.fecha < todayISO() && Number(c.restante || 0) > 0)
@@ -1003,9 +1162,15 @@ await cargarDatosUsuario(usuarioActual.id);
  const prestamo = prestamos.find((p) => p.id === cuota.prestamo_id);
  const cliente = prestamo ? clienteById.get(prestamo.client_id) : null;
  if (!cliente) return;
+
  const prev = map.get(cliente.id);
- const mora = calcularMora(cuota.fecha, Number(cuota.restante || 0), Number(business?.interes_mora_diario || 0.01));
+ const mora = calcularMora(
+ cuota.fecha,
+ Number(cuota.restante || 0),
+ Number(business?.interes_mora_diario || 0.01)
+ );
  const dias = daysLate(cuota.fecha);
+
  if (!prev) {
  map.set(cliente.id, {
  cliente,
@@ -1022,7 +1187,11 @@ await cargarDatosUsuario(usuarioActual.id);
  }
  });
 
- return Array.from(map.values()).filter((item) => `${item.cliente.nombre} ${item.cliente.telefono || ""}`.toLowerCase().includes(q));
+ return Array.from(map.values()).filter((item) =>
+ `${item.cliente.nombre} ${item.cliente.telefono || ""}`
+ .toLowerCase()
+ .includes(q)
+ );
  }, [cuotas, prestamos, clienteById, business?.interes_mora_diario, busquedaMorosos]);
 
  const selectedCliente = clientes.find((c) => c.id === selectedClienteId) || null;
@@ -1032,18 +1201,43 @@ await cargarDatosUsuario(usuarioActual.id);
  return prestamo?.client_id === selectedClienteId;
  });
 
- const totalPrestado = useMemo(() => prestamosReales.reduce((acc, p) => acc + Number(p.monto || 0), 0), [prestamosReales]);
- const totalCobrado = useMemo(() => pagos.reduce((acc, p) => acc + Number(p.monto || 0), 0), [pagos]);
- const saldoPendiente = useMemo(() => prestamosReales.reduce((acc, p) => acc + Number(p.saldoReal || 0), 0), [prestamosReales]);
+ const totalPrestado = useMemo(
+ () => prestamosReales.reduce((acc, p) => acc + Number(p.monto || 0), 0),
+ [prestamosReales]
+ );
+ const totalCobrado = useMemo(
+ () => pagos.reduce((acc, p) => acc + Number(p.monto || 0), 0),
+ [pagos]
+ );
+ const saldoPendiente = useMemo(
+ () => prestamosReales.reduce((acc, p) => acc + Number(p.saldoReal || 0), 0),
+ [prestamosReales]
+ );
  const totalVencido = useMemo(
- () => cuotas.filter((c) => c.fecha < todayISO() && Number(c.restante || 0) > 0).reduce((acc, c) => acc + Number(c.restante || 0), 0),
+ () =>
+ cuotas
+ .filter((c) => c.fecha < todayISO() && Number(c.restante || 0) > 0)
+ .reduce((acc, c) => acc + Number(c.restante || 0), 0),
  [cuotas]
  );
  const moraTotal = useMemo(
- () => cuotas.reduce((acc, c) => acc + calcularMora(c.fecha, Number(c.restante || 0), Number(business?.interes_mora_diario || 0.01)), 0),
+ () =>
+ cuotas.reduce(
+ (acc, c) =>
+ acc +
+ calcularMora(
+ c.fecha,
+ Number(c.restante || 0),
+ Number(business?.interes_mora_diario || 0.01)
+ ),
+ 0
+ ),
  [cuotas, business?.interes_mora_diario]
  );
- const cobrosHoy = useMemo(() => cuotas.filter((c) => c.fecha === todayISO() && Number(c.restante || 0) > 0).length, [cuotas]);
+ const cobrosHoy = useMemo(
+ () => cuotas.filter((c) => c.fecha === todayISO() && Number(c.restante || 0) > 0).length,
+ [cuotas]
+ );
  const clientesVip = clientes.filter((c) => getNivelByScore(Number(c.score || 0)) === "VIP").length;
  const clientesBuenos = clientes.filter((c) => getNivelByScore(Number(c.score || 0)) === "BUENO").length;
  const clientesRegulares = clientes.filter((c) => getNivelByScore(Number(c.score || 0)) === "REGULAR").length;
@@ -1051,94 +1245,129 @@ await cargarDatosUsuario(usuarioActual.id);
 
  if (!usuarioActual) {
  return (
- <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
- <div style={{ ...cardStyle(), width: "100%", maxWidth: 430, display: "grid", gap: 16 }}>
- <SectionTitle title="CREDI YA" subtitle="Control profesional de préstamos y cobros" />
+ <div
+ style={{
+ minHeight: "100vh",
+ background: BG,
+ display: "flex",
+ alignItems: "center",
+ justifyContent: "center",
+ padding: 20,
+ }}
+ >
+ <div
+ style={{
+ ...cardStyle(),
+ width: "100%",
+ maxWidth: 430,
+ display: "grid",
+ gap: 16,
+ }}
+ >
+ <SectionTitle
+ title="CREDI YA"
+ subtitle="Control profesional de préstamos y cobros"
+ />
 
- <input style={inputStyle()} placeholder="Usuario" value={usuarioLogin} onChange={(e) => setUsuarioLogin(e.target.value)} />
- <input style={inputStyle()} placeholder="Contraseña" type="password" value={passwordLogin} onChange={(e) => setPasswordLogin(e.target.value)} />
- <button style={buttonStyle(true)} onClick={login}>Entrar</button>
- <button style={buttonStyle()} onClick={crearUsuarioRapido}>Crear usuario</button>
- <p style={{ margin: 0, color: MUTED }}>Usuarios creados: {usuarios.length}</p>
+ <input
+ style={inputStyle()}
+ placeholder="Usuario"
+ value={usuarioLogin}
+ onChange={(e) => setUsuarioLogin(e.target.value)}
+ />
+
+ <input
+ style={inputStyle()}
+ placeholder="Contraseña"
+ type="password"
+ value={passwordLogin}
+ onChange={(e) => setPasswordLogin(e.target.value)}
+ />
+
+ <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+ <input
+ type="checkbox"
+ checked={mantenerSesion}
+ onChange={(e) => {
+ const value = e.target.checked;
+ setMantenerSesion(value);
+ localStorage.setItem(
+ SESSION_PERSIST_KEY,
+ value ? "true" : "false"
+ );
+ if (!value) localStorage.removeItem(SESSION_KEY);
+ }}
+ />
+ Mantener sesión iniciada
+ </label>
+
+ <button style={buttonStyle(true)} onClick={login}>
+ Entrar
+ </button>
+
+ <button style={buttonStyle()} onClick={crearUsuarioRapido}>
+ Crear usuario
+ </button>
+
+ <p style={{ margin: 0, color: MUTED }}>
+ Usuarios creados: {usuarios.length}
+ </p>
  </div>
  </div>
  );
  }
 
  return (
-  <div style={{ minHeight: "100vh", background: BG, padding: 16, paddingBottom: 90 }}>
+ <div
+ style={{
+ minHeight: "100vh",
+ background: BG,
+ padding: 16,
+ paddingBottom: 92,
+ }}
+ >
  <div style={{ maxWidth: 1180, margin: "0 auto", display: "grid", gap: 16 }}>
  <div style={{ ...cardStyle(), display: "grid", gap: 16 }}>
- <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+ <div
+ style={{
+ display: "flex",
+ justifyContent: "space-between",
+ gap: 16,
+ flexWrap: "wrap",
+ alignItems: "center",
+ }}
+ >
  <div style={{ display: "grid", gap: 6 }}>
- <h1 style={{ margin: 0, fontSize: 34, color: TEXT }}>{configNegocio || business?.negocio || "CREDI YA"}</h1>
- <p style={{ margin: 0, color: MUTED }}>Usuario: {usuarioActual.nombre || usuarioActual.usuario}</p>
- <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
- {usuarioActual && (
-  <div
-    style={{
-      position: "fixed",
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: "#ffffff",
-      borderTop: `1px solid ${BORDER}`,
-      display: "flex",
-      justifyContent: "space-around",
-      gap: 8,
-      padding: "10px 12px",
-      zIndex: 999,
-      boxShadow: "0 -4px 12px rgba(0,0,0,0.06)",
-    }}
-  >
-    <button
-      style={buttonStyle(screen === "dashboard")}
-      onClick={() => setScreen("dashboard")}
-    >
-      Inicio
-    </button>
-
-    <button
-      style={buttonStyle(screen === "clientes")}
-      onClick={() => setScreen("clientes")}
-    >
-      Clientes
-    </button>
-
-    <button
-      style={buttonStyle(screen === "cobros")}
-      onClick={() => setScreen("cobros")}
-    >
-      Cobros
-    </button>
-
-    <button
-      style={buttonStyle(screen === "pagos")}
-      onClick={() => setScreen("pagos")}
-    >
-      Pagos
-    </button>
-  </div>
-)}
+ <h1 style={{ margin: 0, fontSize: 34, color: TEXT }}>
+ {configNegocio || business?.negocio || "CREDI YA"}
+ </h1>
+ <p style={{ margin: 0, color: MUTED }}>
+ Usuario: {usuarioActual.nombre || usuarioActual.usuario}
+ </p>
  </div>
 
-
- 
- <NavBtn to="dashboard" label="Dashboard" screen={screen} setScreen={setScreen} />
- <NavBtn to="clientes" label="Clientes" screen={screen} setScreen={setScreen} />
- <NavBtn to="prestamos" label="Préstamos" screen={screen} setScreen={setScreen} />
- <NavBtn to="cobros" label="Cobros" screen={screen} setScreen={setScreen} />
- <NavBtn to="pagos" label="Pagos" screen={screen} setScreen={setScreen} />
- <NavBtn to="morosos" label="Morosos" screen={screen} setScreen={setScreen} />
- <NavBtn to="configuracion" label="Config" screen={screen} setScreen={setScreen} />
- <button style={buttonStyle()} onClick={cerrarSesion}>Salir</button>
+ <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+ <button style={buttonStyle()} onClick={() => setScreen("morosos")}>
+ Morosos
+ </button>
+ <button
+ style={buttonStyle()}
+ onClick={() => setScreen("configuracion")}
+ >
+ Config
+ </button>
  </div>
  </div>
  </div>
 
  {screen === "dashboard" && (
- <>
- <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+ <div
+ style={{
+ display: "grid",
+ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+ gap: 16,
+ }}
+ >
  <MetricCard title="Total prestado" value={formatMoney(totalPrestado)} />
  <MetricCard title="Total cobrado" value={formatMoney(totalCobrado)} />
  <MetricCard title="Saldo pendiente" value={formatMoney(saldoPendiente)} />
@@ -1150,7 +1379,6 @@ await cargarDatosUsuario(usuarioActual.id);
  <MetricCard title="Clientes regulares" value={clientesRegulares} />
  <MetricCard title="Morosos" value={clientesMorosos} />
  </div>
- </>
  )}
 
  {screen === "clientes" && (
@@ -1158,12 +1386,23 @@ await cargarDatosUsuario(usuarioActual.id);
  <SectionTitle title="Clientes" subtitle="Búsqueda, edición y ficha completa" />
 
  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
- <button style={buttonStyle(true)} onClick={() => { setMostrarFormCliente((v) => !v); if (!mostrarFormCliente) limpiarFormularioCliente(); }}>
+ <button
+ style={buttonStyle(true)}
+ onClick={() => {
+ setMostrarFormCliente((v) => !v);
+ if (!mostrarFormCliente) limpiarFormularioCliente();
+ }}
+ >
  {mostrarFormCliente ? "Cerrar formulario" : editingClienteId ? "Editar cliente" : "Nuevo cliente"}
  </button>
  </div>
 
- <input style={inputStyle()} placeholder="Buscar por nombre, teléfono, documento o ruta" value={busquedaClientes} onChange={(e) => setBusquedaClientes(e.target.value)} />
+ <input
+ style={inputStyle()}
+ placeholder="Buscar por nombre, teléfono, documento o ruta"
+ value={busquedaClientes}
+ onChange={(e) => setBusquedaClientes(e.target.value)}
+ />
 
  {mostrarFormCliente && (
  <div style={{ ...cardStyle(), display: "grid", gap: 12 }}>
@@ -1176,9 +1415,20 @@ await cargarDatosUsuario(usuarioActual.id);
  <input style={inputStyle()} placeholder="Referencia" value={clienteReferencia} onChange={(e) => setClienteReferencia(e.target.value)} />
  <input style={inputStyle()} placeholder="Notas" value={clienteNotas} onChange={(e) => setClienteNotas(e.target.value)} />
  <input style={inputStyle()} placeholder="Ruta" value={clienteRuta} onChange={(e) => setClienteRuta(e.target.value)} />
+
  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
- <button style={buttonStyle(true)} onClick={guardarCliente}>Guardar</button>
- <button style={buttonStyle()} onClick={() => { limpiarFormularioCliente(); setMostrarFormCliente(false); }}>Cancelar</button>
+ <button style={buttonStyle(true)} onClick={guardarCliente}>
+ Guardar
+ </button>
+ <button
+ style={buttonStyle()}
+ onClick={() => {
+ limpiarFormularioCliente();
+ setMostrarFormCliente(false);
+ }}
+ >
+ Cancelar
+ </button>
  </div>
  </div>
  )}
@@ -1191,14 +1441,32 @@ await cargarDatosUsuario(usuarioActual.id);
  <div key={c.id} style={{ ...cardStyle(), display: "grid", gap: 8 }}>
  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
  <div style={{ display: "grid", gap: 6 }}>
- <strong>{c.nombre}</strong>
+ <strong style={{ color: "#111", fontSize: 16 }}>{c.nombre}</strong>
  <span style={{ color: MUTED }}>{c.telefono || "-"}</span>
- <span style={badgeStyle(badgeColor(getNivelByScore(Number(c.score || 0))))}>{getNivelByScore(Number(c.score || 0))}</span>
+ <span style={badgeStyle(badgeColor(getNivelByScore(Number(c.score || 0))))}>
+ {getNivelByScore(Number(c.score || 0))}
+ </span>
  </div>
+
  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
- <button style={buttonStyle()} onClick={() => { setSelectedClienteId(c.id); setScreen("clienteDetalle"); }}>Ficha</button>
- <button style={buttonStyle()} onClick={() => editarCliente(c)}>Editar</button>
- <button style={{ ...buttonStyle(), color: DANGER, border: `1px solid ${DANGER}` }} onClick={() => void eliminarCliente(c.id)}>Borrar</button>
+ <button
+ style={buttonStyle()}
+ onClick={() => {
+ setSelectedClienteId(c.id);
+ setScreen("clienteDetalle");
+ }}
+ >
+ Ficha
+ </button>
+ <button style={buttonStyle()} onClick={() => editarCliente(c)}>
+ Editar
+ </button>
+ <button
+ style={{ ...buttonStyle(), color: DANGER, border: `1px solid ${DANGER}` }}
+ onClick={() => void eliminarCliente(c.id)}
+ >
+ Borrar
+ </button>
  </div>
  </div>
  </div>
@@ -1213,8 +1481,12 @@ await cargarDatosUsuario(usuarioActual.id);
  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
  <SectionTitle title="Ficha del cliente" subtitle="Historial y datos completos" />
  <div style={{ display: "flex", gap: 8 }}>
- <button style={buttonStyle()} onClick={() => selectedCliente && editarCliente(selectedCliente)}>Editar</button>
- <button style={buttonStyle()} onClick={() => setScreen("clientes")}>Volver</button>
+ <button style={buttonStyle()} onClick={() => selectedCliente && editarCliente(selectedCliente)}>
+ Editar
+ </button>
+ <button style={buttonStyle()} onClick={() => setScreen("clientes")}>
+ Volver
+ </button>
  </div>
  </div>
 
@@ -1271,200 +1543,206 @@ await cargarDatosUsuario(usuarioActual.id);
  )}
 
  {screen === "prestamos" && (
-  <div style={{ ...cardStyle(), display: "grid", gap: 16 }}>
-    <SectionTitle
-      title="Préstamos"
-      subtitle="Interés por defecto 15% y frecuencia diaria/semanal/mensual"
-    />
+ <div style={{ ...cardStyle(), display: "grid", gap: 16 }}>
+ <SectionTitle
+ title="Préstamos"
+ subtitle="Frecuencia diaria, semanal y mensual"
+ />
 
-    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-      <button
-        style={buttonStyle(true)}
-        onClick={() => setMostrarFormPrestamo((v) => !v)}
-      >
-        {mostrarFormPrestamo ? "Cerrar formulario" : "Nuevo préstamo"}
-      </button>
-    </div>
+ <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+ <button
+ style={buttonStyle(true)}
+ onClick={() => setMostrarFormPrestamo((v) => !v)}
+ >
+ {mostrarFormPrestamo ? "Cerrar formulario" : "Nuevo préstamo"}
+ </button>
+ </div>
 
-    <input
-      style={inputStyle()}
-      placeholder="Buscar por cliente o estado"
-      value={busquedaPrestamos}
-      onChange={(e) => setBusquedaPrestamos(e.target.value)}
-    />
+ <input
+ style={inputStyle()}
+ placeholder="Buscar por cliente o estado"
+ value={busquedaPrestamos}
+ onChange={(e) => setBusquedaPrestamos(e.target.value)}
+ />
 
-    {mostrarFormPrestamo && (
-      <div style={{ ...cardStyle(), display: "grid", gap: 12 }}>
-        <select
-          style={inputStyle()}
-          value={prestamoClienteId}
-          onChange={(e) => setPrestamoClienteId(e.target.value)}
-        >
-          <option value="">Selecciona cliente</option>
-          {clientes.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nombre}
-            </option>
-          ))}
-        </select>
+ {mostrarFormPrestamo && (
+ <div style={{ ...cardStyle(), display: "grid", gap: 12 }}>
+ <select
+ style={inputStyle()}
+ value={prestamoClienteId}
+ onChange={(e) => setPrestamoClienteId(e.target.value)}
+ >
+ <option value="">Selecciona cliente</option>
+ {clientes.map((c) => (
+ <option key={c.id} value={c.id}>
+ {c.nombre}
+ </option>
+ ))}
+ </select>
 
-        <input
-          style={inputStyle()}
-          placeholder="Monto"
-          value={prestamoMonto}
-          onChange={(e) => setPrestamoMonto(e.target.value)}
-        />
+ <input
+ style={inputStyle()}
+ placeholder="Monto"
+ value={prestamoMonto}
+ onChange={(e) => setPrestamoMonto(e.target.value)}
+ />
 
-        <input
-          style={inputStyle()}
-          placeholder="Interés (por defecto 0.15)"
-          value={prestamoInteres}
-          onChange={(e) => setPrestamoInteres(e.target.value)}
-        />
+ <select
+ style={inputStyle()}
+ value={prestamoFrecuencia}
+ onChange={(e) => {
+ const nuevaFrecuencia = e.target.value as
+ | "DIARIO"
+ | "SEMANAL"
+ | "MENSUAL";
 
-        <select
-          style={inputStyle()}
-          value={prestamoFrecuencia}
-          onChange={(e) => {
-            const nuevaFrecuencia = e.target.value as
-              | "DIARIO"
-              | "SEMANAL"
-              | "MENSUAL";
+ setPrestamoFrecuencia(nuevaFrecuencia);
 
-            setPrestamoFrecuencia(nuevaFrecuencia);
+ if (nuevaFrecuencia === "DIARIO") {
+ setPrestamoPlanDiario("20");
+ setPrestamoCuotas("20");
+ } else if (nuevaFrecuencia === "SEMANAL") {
+ setPrestamoPlanSemanal("4");
+ setPrestamoCuotas("4");
+ } else if (nuevaFrecuencia === "MENSUAL") {
+ setPrestamoPlanMensual("1");
+ setPrestamoCuotas("1");
+ }
+ }}
+ >
+ <option value="DIARIO">DIARIO</option>
+ <option value="SEMANAL">SEMANAL</option>
+ <option value="MENSUAL">MENSUAL</option>
+ </select>
 
-            if (nuevaFrecuencia === "DIARIO") {
-              setPrestamoPlanDiario("20");
-              setPrestamoCuotas("20");
-            } if (nuevaFrecuencia === "SEMANAL") {
-  setPrestamoPlanSemanal("4");
-  setPrestamoCuotas("4");
-}  else if (nuevaFrecuencia === "MENSUAL") {
-  setPrestamoPlanMensual("1");
-  setPrestamoCuotas("1");
-}
-          }}
-        >
-          <option value="DIARIO">DIARIO</option>
-          <option value="SEMANAL">SEMANAL</option>
-          <option value="MENSUAL">MENSUAL</option>
-        </select>
+ {prestamoFrecuencia === "DIARIO" && (
+ <select
+ style={inputStyle()}
+ value={prestamoPlanDiario}
+ onChange={(e) => {
+ const dias = e.target.value;
+ setPrestamoPlanDiario(dias);
+ setPrestamoCuotas(dias);
+ }}
+ >
+ <option value="20">20 días</option>
+ <option value="24">24 días</option>
+ <option value="30">30 días</option>
+ </select>
+ )}
 
-        {prestamoFrecuencia === "DIARIO" && (
-          <select
-            style={inputStyle()}
-            value={prestamoPlanDiario}
-            onChange={(e) => {
-              const dias = e.target.value;
-              setPrestamoPlanDiario(dias);
-              setPrestamoCuotas(dias);
-            }}
-          >
-            <option value="20">20 días</option>
-            <option value="24">24 días</option>
-            <option value="30">30 días</option>
-          </select>
-        )}
-{prestamoFrecuencia === "SEMANAL" && (
-  <select
-    style={inputStyle()}
-    value={prestamoPlanSemanal}
-    onChange={(e) => {
-      const semanas = e.target.value;
-      setPrestamoPlanSemanal(semanas);
-      setPrestamoCuotas(semanas);
-    }}
-  >
-    <option value="4">4 semanas</option>
-    <option value="6">6 semanas</option>
-    <option value="8">8 semanas</option>
-  </select>
-)}
-{prestamoFrecuencia === "MENSUAL" && (
-  <select
-    style={inputStyle()}
-    value={prestamoPlanMensual}
-    onChange={(e) => {
-      const meses = e.target.value;
-      setPrestamoPlanMensual(meses);
-      setPrestamoCuotas(meses);
-    }}
-  >
-    <option value="1">1 mes</option>
-    <option value="2">2 meses</option>
-    <option value="3">3 meses</option>
-  </select>
-)}
-        <input
-          style={inputStyle()}
-          placeholder="Número de cuotas"
-          value={prestamoCuotas}
-          onChange={(e) => setPrestamoCuotas(e.target.value)}
-        />
+ {prestamoFrecuencia === "SEMANAL" && (
+ <select
+ style={inputStyle()}
+ value={prestamoPlanSemanal}
+ onChange={(e) => {
+ const semanas = e.target.value;
+ setPrestamoPlanSemanal(semanas);
+ setPrestamoCuotas(semanas);
+ }}
+ >
+ <option value="4">4 semanas</option>
+ <option value="6">6 semanas</option>
+ <option value="8">8 semanas</option>
+ </select>
+ )}
 
-        <input
-          style={inputStyle()}
-          type="date"
-          value={prestamoFechaInicio}
-          onChange={(e) => setPrestamoFechaInicio(e.target.value)}
-        />
+ {prestamoFrecuencia === "MENSUAL" && (
+ <select
+ style={inputStyle()}
+ value={prestamoPlanMensual}
+ onChange={(e) => {
+ const meses = e.target.value;
+ setPrestamoPlanMensual(meses);
+ setPrestamoCuotas(meses);
+ }}
+ >
+ <option value="1">1 mes</option>
+ <option value="2">2 meses</option>
+ <option value="3">3 meses</option>
+ </select>
+ )}
 
-        <button style={buttonStyle(true)} onClick={guardarPrestamo}>
-          Guardar préstamo
-        </button>
-      </div>
-    )}
+ <input
+ style={inputStyle()}
+ placeholder="Número de cuotas"
+ value={prestamoCuotas}
+ onChange={(e) => setPrestamoCuotas(e.target.value)}
+ />
 
-    <div style={{ display: "grid", gap: 10 }}>
-      {prestamosFiltrados.length === 0 ? (
-        <p style={{ margin: 0, color: MUTED }}>No hay préstamos.</p>
-      ) : (
-        prestamosFiltrados.map((p) => (
-          <div key={p.id} style={{ ...cardStyle(), display: "grid", gap: 8 }}>
-           <strong
-  style={{
-    color: "#111",
-    fontSize: 18,
-    fontWeight: 700,
-    letterSpacing: 0.3,
-  }}
->
-  {p.cliente?.nombre || "Cliente"}
-</strong>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                gap: 8,
-                color: MUTED,
-              }}
-            >
-              <span>Monto: {formatMoney(Number(p.monto || 0))}</span>
-              <span>Total: {formatMoney(Number(p.total || 0))}</span>
-              <span>Cuota: {formatMoney(Number(p.cuota || 0))}</span>
-              <span>Saldo real: {formatMoney(Number(p.saldoReal || 0))}</span>
-              <span>Frecuencia: {p.frecuencia || "-"}</span>
-              <span>Inicio: {p.fecha_inicio || "-"}</span>
-            </div>
+ <input
+ style={inputStyle()}
+ type="date"
+ value={prestamoFechaInicio}
+ onChange={(e) => setPrestamoFechaInicio(e.target.value)}
+ />
 
-            <span style={badgeStyle(badgeColor(p.estadoReal))}>
-              {p.estadoReal}
-            </span>
-          </div>
-        ))
-      )}
-    </div>
-  </div>
-)}
+ <button style={buttonStyle(true)} onClick={guardarPrestamo}>
+ Guardar préstamo
+ </button>
+ </div>
+ )}
+
+ <div style={{ display: "grid", gap: 10 }}>
+ {prestamosFiltrados.length === 0 ? (
+ <p style={{ margin: 0, color: MUTED }}>No hay préstamos.</p>
+ ) : (
+ prestamosFiltrados.map((p) => (
+ <div key={p.id} style={{ ...cardStyle(), display: "grid", gap: 8 }}>
+ <strong
+ style={{
+ color: "#111",
+ fontSize: 18,
+ fontWeight: 700,
+ letterSpacing: 0.3,
+ }}
+ >
+ {p.cliente?.nombre || "Cliente"}
+ </strong>
+
+ <div
+ style={{
+ display: "grid",
+ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+ gap: 8,
+ color: MUTED,
+ }}
+ >
+ <span>Monto: {formatMoney(Number(p.monto || 0))}</span>
+ <span>Total: {formatMoney(Number(p.total || 0))}</span>
+ <span>Cuota: {formatMoney(Number(p.cuota || 0))}</span>
+ <span>Saldo real: {formatMoney(Number(p.saldoReal || 0))}</span>
+ <span>Frecuencia: {p.frecuencia || "-"}</span>
+ <span>Inicio: {p.fecha_inicio || "-"}</span>
+ </div>
+
+ <span style={badgeStyle(badgeColor(p.estadoReal))}>{p.estadoReal}</span>
+ </div>
+ ))
+ )}
+ </div>
+ </div>
+ )}
 
  {screen === "cobros" && (
  <div style={{ ...cardStyle(), display: "grid", gap: 16 }}>
  <SectionTitle title="Cobros" subtitle="Filtro cobrar hoy y registro de abonos" />
+
  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
- <button style={buttonStyle(soloCobrosHoy)} onClick={() => setSoloCobrosHoy(true)}>Solo hoy</button>
- <button style={buttonStyle(!soloCobrosHoy)} onClick={() => setSoloCobrosHoy(false)}>Todos</button>
+ <button style={buttonStyle(soloCobrosHoy)} onClick={() => setSoloCobrosHoy(true)}>
+ Solo hoy
+ </button>
+ <button style={buttonStyle(!soloCobrosHoy)} onClick={() => setSoloCobrosHoy(false)}>
+ Todos
+ </button>
  </div>
- <input style={inputStyle()} placeholder="Buscar por cliente o fecha" value={busquedaCobros} onChange={(e) => setBusquedaCobros(e.target.value)} />
+
+ <input
+ style={inputStyle()}
+ placeholder="Buscar por cliente o fecha"
+ value={busquedaCobros}
+ onChange={(e) => setBusquedaCobros(e.target.value)}
+ />
 
  {mostrarFormPago && selectedCobroCuotaId && (
  <div style={{ ...cardStyle(), display: "grid", gap: 12 }}>
@@ -1474,8 +1752,18 @@ await cargarDatosUsuario(usuarioActual.id);
  <input style={inputStyle()} placeholder="Método" value={pagoMetodo} onChange={(e) => setPagoMetodo(e.target.value)} />
  <input style={inputStyle()} placeholder="Nota" value={pagoNota} onChange={(e) => setPagoNota(e.target.value)} />
  <div style={{ display: "flex", gap: 8 }}>
- <button style={buttonStyle(true)} onClick={() => void registrarPago()}>Guardar pago</button>
- <button style={buttonStyle()} onClick={() => { setMostrarFormPago(false); setSelectedCobroCuotaId(null); }}>Cancelar</button>
+ <button style={buttonStyle(true)} onClick={() => void registrarPago()}>
+ Guardar pago
+ </button>
+ <button
+ style={buttonStyle()}
+ onClick={() => {
+ setMostrarFormPago(false);
+ setSelectedCobroCuotaId(null);
+ }}
+ >
+ Cancelar
+ </button>
  </div>
  </div>
  )}
@@ -1484,27 +1772,53 @@ await cargarDatosUsuario(usuarioActual.id);
  {cobrosFiltrados.length === 0 ? (
  <p style={{ margin: 0, color: MUTED }}>No hay cobros pendientes.</p>
  ) : (
- cobrosFiltrados.map(({ cuota, prestamo, cliente }) => {
- const mora = calcularMora(cuota.fecha, Number(cuota.restante || 0), Number(business?.interes_mora_diario || 0.01));
+ cobrosFiltrados.map(({ cuota, cliente }) => {
+ const mora = calcularMora(
+ cuota.fecha,
+ Number(cuota.restante || 0),
+ Number(business?.interes_mora_diario || 0.01)
+ );
+
+ const totalCobro = Number(cuota.restante || 0) + mora;
+
  return (
  <div key={cuota.id} style={{ ...cardStyle(), display: "grid", gap: 8 }}>
  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
  <div style={{ display: "grid", gap: 6 }}>
- <strong>{cliente?.nombre || "Cliente"}</strong>
+ <strong style={{ color: "#111", fontSize: 16 }}>
+ {cliente?.nombre || "Cliente"}
+ </strong>
  <span style={{ color: MUTED }}>Fecha: {cuota.fecha}</span>
  <span style={{ color: MUTED }}>Cuota #{Number(cuota.numero || 0)}</span>
- <span style={{ color: MUTED }}>Restante: {formatMoney(Number(cuota.restante || 0))}</span>
+ <span style={{ color: MUTED }}>Capital pendiente: {formatMoney(Number(cuota.restante || 0))}</span>
  <span style={{ color: DANGER }}>Mora: {formatMoney(mora)}</span>
+ <span style={{ color: TEXT, fontWeight: 700 }}>Total a cobrar: {formatMoney(totalCobro)}</span>
  </div>
+
  <div style={{ display: "grid", gap: 8, alignContent: "start" }}>
- <span style={badgeStyle(badgeColor(cuota.fecha < todayISO() ? "VENCIDA" : cuota.fecha === todayISO() ? "COBRAR HOY" : cuota.estado || "PENDIENTE"))}>
- {cuota.fecha < todayISO() ? "VENCIDA" : cuota.fecha === todayISO() ? "COBRAR HOY" : cuota.estado || "PENDIENTE"}
+ <span
+ style={badgeStyle(
+ badgeColor(
+ cuota.fecha < todayISO()
+ ? "VENCIDA"
+ : cuota.fecha === todayISO()
+ ? "COBRAR HOY"
+ : cuota.estado || "PENDIENTE"
+ )
+ )}
+ >
+ {cuota.fecha < todayISO()
+ ? "VENCIDA"
+ : cuota.fecha === todayISO()
+ ? "COBRAR HOY"
+ : cuota.estado || "PENDIENTE"}
  </span>
+
  <button
  style={buttonStyle(true)}
  onClick={() => {
  setSelectedCobroCuotaId(cuota.id);
- setPagoMonto(String(Number(cuota.restante || 0)));
+ setPagoMonto(String(Number(totalCobro.toFixed(2))));
  setPagoFecha(todayISO());
  setPagoMetodo("EFECTIVO");
  setPagoNota("");
@@ -1526,7 +1840,13 @@ await cargarDatosUsuario(usuarioActual.id);
  {screen === "pagos" && (
  <div style={{ ...cardStyle(), display: "grid", gap: 16 }}>
  <SectionTitle title="Pagos" subtitle="Historial completo" />
- <input style={inputStyle()} placeholder="Buscar por cliente, fecha o método" value={busquedaPagos} onChange={(e) => setBusquedaPagos(e.target.value)} />
+ <input
+ style={inputStyle()}
+ placeholder="Buscar por cliente, fecha o método"
+ value={busquedaPagos}
+ onChange={(e) => setBusquedaPagos(e.target.value)}
+ />
+
  <div style={{ display: "grid", gap: 10 }}>
  {pagosFiltrados.length === 0 ? (
  <p style={{ margin: 0, color: MUTED }}>No hay pagos.</p>
@@ -1534,11 +1854,18 @@ await cargarDatosUsuario(usuarioActual.id);
  pagosFiltrados.map((p) => {
  const prestamo = prestamosReales.find((x) => x.id === p.prestamo_id);
  const cliente = prestamo?.cliente;
+
  return (
  <div key={p.id} style={{ ...cardStyle(), display: "grid", gap: 6 }}>
- <strong>{cliente?.nombre || "Cliente"}</strong>
- <span style={{ color: MUTED }}>Fecha: {p.fecha} · Monto: {formatMoney(Number(p.monto || 0))}</span>
- <span style={{ color: MUTED }}>Método: {p.metodo || "EFECTIVO"} · Puntual: {p.puntual ? "Sí" : "No"}</span>
+ <strong style={{ color: "#111", fontSize: 16 }}>
+ {cliente?.nombre || "Cliente"}
+ </strong>
+ <span style={{ color: MUTED }}>
+ Fecha: {p.fecha} · Monto: {formatMoney(Number(p.monto || 0))}
+ </span>
+ <span style={{ color: MUTED }}>
+ Método: {p.metodo || "EFECTIVO"} · Puntual: {p.puntual ? "Sí" : "No"}
+ </span>
  <span style={{ color: MUTED }}>Nota: {p.nota || "-"}</span>
  </div>
  );
@@ -1551,14 +1878,20 @@ await cargarDatosUsuario(usuarioActual.id);
  {screen === "morosos" && (
  <div style={{ ...cardStyle(), display: "grid", gap: 16 }}>
  <SectionTitle title="Morosos" subtitle="Clientes con cuotas vencidas y mora acumulada" />
- <input style={inputStyle()} placeholder="Buscar morosos" value={busquedaMorosos} onChange={(e) => setBusquedaMorosos(e.target.value)} />
+ <input
+ style={inputStyle()}
+ placeholder="Buscar morosos"
+ value={busquedaMorosos}
+ onChange={(e) => setBusquedaMorosos(e.target.value)}
+ />
+
  <div style={{ display: "grid", gap: 10 }}>
  {morosos.length === 0 ? (
  <p style={{ margin: 0, color: MUTED }}>No hay morosos.</p>
  ) : (
  morosos.map((item) => (
  <div key={item.cliente.id} style={{ ...cardStyle(), display: "grid", gap: 6 }}>
- <strong>{item.cliente.nombre}</strong>
+ <strong style={{ color: "#111", fontSize: 16 }}>{item.cliente.nombre}</strong>
  <span style={{ color: MUTED }}>Teléfono: {item.cliente.telefono || "-"}</span>
  <span style={{ color: MUTED }}>Total vencido: {formatMoney(item.totalVencido)}</span>
  <span style={{ color: DANGER }}>Mora acumulada: {formatMoney(item.totalMora)}</span>
@@ -1573,41 +1906,190 @@ await cargarDatosUsuario(usuarioActual.id);
 
  {screen === "configuracion" && (
  <div style={{ ...cardStyle(), display: "grid", gap: 12 }}>
- <SectionTitle title="Configuración" subtitle="Nombre del negocio, logo e interés de mora por usuario" />
- <input style={inputStyle()} placeholder="Nombre del negocio" value={configNegocio} onChange={(e) => setConfigNegocio(e.target.value)} />
- <input style={inputStyle()} placeholder="Interés mora diario. Ej: 0.01" value={configInteresMora} onChange={(e) => setConfigInteresMora(e.target.value)} />
+ <SectionTitle
+ title="Configuración"
+ subtitle="Nombre del negocio, logo, intereses, moneda y sesión"
+ />
+
+ <input
+ style={inputStyle()}
+ placeholder="Nombre del negocio"
+ value={configNegocio}
+ onChange={(e) => setConfigNegocio(e.target.value)}
+ />
+
+ <input
+ style={inputStyle()}
+ placeholder="Interés préstamo. Ej: 0.15"
+ value={configInteresPrestamo}
+ onChange={(e) => setConfigInteresPrestamo(e.target.value)}
+ />
+
+ <input
+ style={inputStyle()}
+ placeholder="Interés mora diario. Ej: 0.01"
+ value={configInteresMora}
+ onChange={(e) => setConfigInteresMora(e.target.value)}
+ />
+
  <select
-  style={inputStyle()}
-  value={configMoneda}
-  onChange={(e) => setConfigMoneda(e.target.value)}
->
-  <option value="EUR">Euro (€)</option>
-  <option value="USD">Dólar ($)</option>
-  <option value="COP">Peso colombiano ($)</option>
-  <option value="MXN">Peso mexicano ($)</option>
-  <option value="DOP">Peso dominicano (RD$)</option>
-</select>
- <input type="file" accept="image/*" onChange={(e) => void onLogoChange(e.target.files?.[0] || null)} />
- {configLogoBase64 ? <img src={configLogoBase64} alt="logo" style={{ width: 120, height: 60, objectFit: "contain", border: `1px solid ${BORDER}`, borderRadius: 8, background: "#fff" }} /> : null}
- <button style={buttonStyle(true)} onClick={() => void guardarBusiness()}>Guardar configuración</button>
- <p style={{ margin: 0, color: MUTED }}>Negocio actual: {business?.negocio || configNegocio || "CREDI YA"}</p>
+ style={inputStyle()}
+ value={configMoneda}
+ onChange={(e) => setConfigMoneda(e.target.value)}
+ >
+ <option value="EUR">Euro (€)</option>
+ <option value="USD">Dólar ($)</option>
+ <option value="COP">Peso colombiano ($)</option>
+ <option value="MXN">Peso mexicano ($)</option>
+ <option value="DOP">Peso dominicano (RD$)</option>
+ </select>
+
+ <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+ <input
+ type="checkbox"
+ checked={mantenerSesion}
+ onChange={(e) => {
+ const value = e.target.checked;
+ setMantenerSesion(value);
+ localStorage.setItem(
+ SESSION_PERSIST_KEY,
+ value ? "true" : "false"
+ );
+
+ if (!value) {
+ localStorage.removeItem(SESSION_KEY);
+ }
+ }}
+ />
+ Mantener sesión iniciada
+ </label>
+
+ <input
+ type="file"
+ accept="image/*"
+ onChange={(e) => void onLogoChange(e.target.files?.[0] || null)}
+ />
+
+ {configLogoBase64 ? (
+ <img
+ src={configLogoBase64}
+ alt="logo"
+ style={{
+ width: 120,
+ height: 60,
+ objectFit: "contain",
+ border: `1px solid ${BORDER}`,
+ borderRadius: 8,
+ background: "#fff",
+ }}
+ />
+ ) : null}
+
+ <button style={buttonStyle(true)} onClick={() => void guardarBusiness()}>
+ Guardar configuración
+ </button>
+
+ <button style={buttonStyle()} onClick={cerrarSesion}>
+ Cerrar sesión
+ </button>
+
+ <p style={{ margin: 0, color: MUTED }}>
+ Negocio actual: {business?.negocio || configNegocio || "CREDI YA"}
+ </p>
  </div>
  )}
-<label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-  <input
-    type="checkbox"
-    checked={localStorage.getItem(SESSION_PERSIST_KEY) === "true"}
-    onChange={(e) =>
-      localStorage.setItem(
-        SESSION_PERSIST_KEY,
-        e.target.checked ? "true" : "false"
-      )
-    }
-  />
-  Mantener sesión iniciada
-</label>
+
  {loading ? <p style={{ color: MUTED, margin: 0 }}>Cargando...</p> : null}
  </div>
+
+ {usuarioActual && (
+ <div
+ style={{
+ position: "fixed",
+ left: 0,
+ right: 0,
+ bottom: 0,
+ background: "#ffffff",
+ borderTop: `1px solid ${BORDER}`,
+ display: "flex",
+ justifyContent: "space-around",
+ gap: 8,
+ padding: "10px 12px",
+ zIndex: 999,
+ boxShadow: "0 -4px 12px rgba(0,0,0,0.06)",
+ }}
+ >
+ <button
+ onClick={() => setScreen("dashboard")}
+ style={{
+ background: "none",
+ border: "none",
+ fontSize: 15,
+ fontWeight: 700,
+ color: screen === "dashboard" ? "#0f172a" : "#94a3b8",
+ cursor: "pointer",
+ }}
+ >
+ Inicio
+ </button>
+
+ <button
+ onClick={() => setScreen("clientes")}
+ style={{
+ background: "none",
+ border: "none",
+ fontSize: 15,
+ fontWeight: 700,
+ color: screen === "clientes" ? "#0f172a" : "#94a3b8",
+ cursor: "pointer",
+ }}
+ >
+ Clientes
+ </button>
+
+ <button
+ onClick={() => setScreen("prestamos")}
+ style={{
+ background: "none",
+ border: "none",
+ fontSize: 15,
+ fontWeight: 700,
+ color: screen === "prestamos" ? "#0f172a" : "#94a3b8",
+ cursor: "pointer",
+ }}
+ >
+ Préstamos
+ </button>
+
+ <button
+ onClick={() => setScreen("cobros")}
+ style={{
+ background: "none",
+ border: "none",
+ fontSize: 15,
+ fontWeight: 700,
+ color: screen === "cobros" ? "#0f172a" : "#94a3b8",
+ cursor: "pointer",
+ }}
+ >
+ Cobros
+ </button>
+
+ <button
+ onClick={() => setScreen("pagos")}
+ style={{
+ background: "none",
+ border: "none",
+ fontSize: 15,
+ fontWeight: 700,
+ color: screen === "pagos" ? "#0f172a" : "#94a3b8",
+ cursor: "pointer",
+ }}
+ >
+ Pagos
+ </button>
+ </div>
+ )}
  </div>
  );
 }
