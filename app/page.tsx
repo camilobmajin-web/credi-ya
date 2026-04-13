@@ -184,6 +184,13 @@ function daysLate(fecha: string) {
  );
  return diff > 0 ? diff : 0;
 }
+function redondearCuota(valor: number) {
+  const entero = Math.floor(valor);
+  const decimal = valor - entero;
+
+  if (decimal <= 0.49) return Number((entero + 0.5).toFixed(2));
+  return Number((entero + 1).toFixed(2));
+}
 
 function calcularMora(fecha: string, restante: number, interesMoraDiario: number) {
  const saldo = Number(restante || 0);
@@ -717,7 +724,8 @@ export default function App() {
  if (!monto || !cuotasCount) return alert("Monto o cuotas inválidos");
 
  const total = Number((monto * (1 + interes)).toFixed(2));
- const valorCuota = Number((total / cuotasCount).toFixed(2));
+ const cuotaBase = total / cuotasCount;
+const valorCuota = redondearCuota(cuotaBase);
 
  const { data: prestamoCreado, error } = await supabase
  .from("prestamos")
