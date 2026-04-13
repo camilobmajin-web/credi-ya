@@ -2095,91 +2095,54 @@ export default function App() {
 
  {usuarioActual && (
  <div
- style={{
- position: "fixed",
- left: 0,
- right: 0,
- bottom: 0,
- background: "#ffffff",
- borderTop: `1px solid ${BORDER}`,
- display: "flex",
- justifyContent: "space-around",
- gap: 8,
- padding: "10px 12px",
- zIndex: 999,
- boxShadow: "0 -4px 12px rgba(0,0,0,0.06)",
- }}
- >
- <button
- onClick={() => setScreen("dashboard")}
- style={{
- background: "none",
- border: "none",
- fontSize: 15,
- fontWeight: 700,
- color: screen === "dashboard" ? "#0f172a" : "#94a3b8",
- cursor: "pointer",
- }}
- >
- Inicio
- </button>
+  style={{
+    position: "fixed",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "#ffffff",
+    borderTop: `1px solid ${BORDER}`,
+    display: "flex",
+    justifyContent: "space-around",
+    padding: "12px 8px",
+    zIndex: 999,
+    boxShadow: "0 -4px 12px rgba(0,0,0,0.08)",
+  }}
+>
+  {[
+    { key: "dashboard", icon: "🏠", label: "Inicio" },
+    { key: "clientes", icon: "👤", label: "Clientes" },
+    { key: "cobros", icon: "💰", label: "Cobros" },
+    { key: "pagos", icon: "📄", label: "Pagos" },
+  ].map((item) => {
+    const active = screen === item.key;
 
- <button
- onClick={() => setScreen("clientes")}
- style={{
- background: "none",
- border: "none",
- fontSize: 15,
- fontWeight: 700,
- color: screen === "clientes" ? "#0f172a" : "#94a3b8",
- cursor: "pointer",
- }}
- >
- Clientes
- </button>
-
- <button
- onClick={() => setScreen("prestamos")}
- style={{
- background: "none",
- border: "none",
- fontSize: 15,
- fontWeight: 700,
- color: screen === "prestamos" ? "#0f172a" : "#94a3b8",
- cursor: "pointer",
- }}
- >
- Préstamos
- </button>
-
- <button
- onClick={() => setScreen("cobros")}
- style={{
- background: "none",
- border: "none",
- fontSize: 15,
- fontWeight: 700,
- color: screen === "cobros" ? "#0f172a" : "#94a3b8",
- cursor: "pointer",
- }}
- >
- Cobros
- </button>
-
- <button
- onClick={() => setScreen("pagos")}
- style={{
- background: "none",
- border: "none",
- fontSize: 15,
- fontWeight: 700,
- color: screen === "pagos" ? "#0f172a" : "#94a3b8",
- cursor: "pointer",
- }}
- >
- Pagos
- </button>
- </div>
+    return (
+      <button
+        key={item.key}
+        onClick={() => setScreen(item.key as Screen)}
+        style={{
+          flex: 1,
+          border: "none",
+          background: active ? "#0f172a" : "#f1f5f9",
+          color: active ? "#fff" : "#64748b",
+          borderRadius: 14,
+          padding: "10px 6px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 4,
+          fontWeight: 600,
+          cursor: "pointer",
+          transition: "0.2s",
+        }}
+      >
+        <span style={{ fontSize: 22 }}>{item.icon}</span>
+        <span style={{ fontSize: 12 }}>{item.label}</span>
+      </button>
+    );
+  })}
+</div>
  )}
  </div>
  );
