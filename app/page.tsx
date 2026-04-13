@@ -1407,7 +1407,36 @@ export default function App() {
  Usuario: {usuarioActual.nombre || usuarioActual.usuario}
  </p>
  </div>
+<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+  <button style={buttonStyle(true)} onClick={() => {
+    setScreen("clientes");
+    setMostrarFormCliente(true);
+    limpiarFormularioCliente();
+  }}>
+    Nuevo cliente
+  </button>
 
+  <button style={buttonStyle()} onClick={() => {
+    setScreen("prestamos");
+    setMostrarFormPrestamo(true);
+  }}>
+    Nuevo préstamo
+  </button>
+
+  <button style={buttonStyle()} onClick={() => {
+    setScreen("cobros");
+    setSoloCobrosHoy(true);
+  }}>
+    Solo hoy
+  </button>
+
+  <button style={buttonStyle()} onClick={() => {
+    setScreen("cobros");
+    setMostrarFormPago(true);
+  }}>
+    Registrar pago
+  </button>
+</div>
  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
  <button style={buttonStyle()} onClick={() => setScreen("morosos")}>
  Morosos
