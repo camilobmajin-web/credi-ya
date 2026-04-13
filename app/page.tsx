@@ -628,19 +628,81 @@ export default function App() {
  }
 
  async function eliminarCliente(clienteId: string) {
- if (!confirm("¿Seguro que quieres borrar este cliente?")) return;
+  if (!confirm("¿Seguro que quieres borrar este cliente y todo su historial?")) return;
+  if (!usuarioActual?.id) return;
 
- const { error } = await supabase.from("clientes").delete().eq("id", clienteId);
- if (error) return alert(`Error borrando cliente: ${error.message}`);
+  // 1. Buscar préstamos del cliente
+  const { data: prestamosCliente, error: prestamosError } = await supabase
+    .from("prestamos")
+    .select("id")
+    .eq("client_id", clienteId)
+    .eq("usuario_id", usuarioActual.id);
 
- if (selectedClienteId === clienteId) {
- setSelectedClienteId(null);
- setScreen("clientes");
- }
+  if (prestamosError) {
+    alert(`Error buscando préstamos del cliente: ${prestamosError.message}`);
+    return;
+  }
 
- if (usuarioActual?.id) void cargarDatosUsuario(usuarioActual.id);
- }
+  const prestamoIds = (prestamosCliente || []).map((p) => p.id);
 
+  // 2. Borrar cuotas de esos préstamos
+  if (prestamoIds.length > 0) {
+    const { error: cuotasError } = await supabase
+      .from("cuotas")
+      .delete()
+      .in("prestamo_id", prestamoIds)
+      .eq("usuario_id", usuarioActual.id);
+
+    if (cuotasError) {
+      alert(`Error borrando cuotas: ${cuotasError.message}`);
+      return;
+    }
+
+    // 3. Borrar pagos de esos préstamos
+    const { error: pagosError } = await supabase
+      .from("pagos")
+      .delete()
+      .in("prestamo_id", prestamoIds)
+      .eq("usuario_id", usuarioActual.id);
+
+    if (pagosError) {
+      alert(`Error borrando pagos: ${pagosError.message}`);
+      return;
+    }
+
+    // 4. Borrar préstamos
+    const { error: prestamosDeleteError } = await supabase
+      .from("prestamos")
+      .delete()
+      .in("id", prestamoIds)
+      .eq("usuario_id", usuarioActual.id);
+
+    if (prestamosDeleteError) {
+      alert(`Error borrando préstamos: ${prestamosDeleteError.message}`);
+      return;
+    }
+  }
+
+  // 5. Borrar cliente
+  const { error: clienteError } = await supabase
+    .from("clientes")
+    .delete()
+    .eq("id", clienteId)
+    .eq("usuario_id", usuarioActual.id);
+
+  if (clienteError) {
+    alert(`Error borrando cliente: ${clienteError.message}`);
+    return;
+  }
+
+  if (selectedClienteId === clienteId) {
+    setSelectedClienteId(null);
+    setScreen("clientes");
+  }
+
+  alert("Cliente y todo su historial borrados");
+  await cargarDatosUsuario(usuarioActual.id);
+}
  async function guardarPrestamo() {
  if (!usuarioActual?.id) return;
  if (!prestamoClienteId) return alert("Selecciona cliente");
