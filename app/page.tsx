@@ -810,117 +810,119 @@ restante: cuotasCalculadas[i],
  void cargarDatosUsuario(usuarioActual.id);
  }
 
- function generarReciboPDF(args: {
- cliente: Cliente | null;
- prestamo: Prestamo | undefined;
- monto: number;
- fecha: string;
- metodo: string;
- nota: string;
- mora: number;
- saldo: number;
- cuotasPendientes: number;
- cuotasPagadas: number;
- cuotaActual: number;
- cuotasTotales: number;
- montoPrestamo: number;
- totalPrestamo: number;
- frecuencia: string;
- }) {
- const doc = new jsPDF();
- const negocio = business?.negocio || "CREDI YA";
- const estado = args.saldo <= 0 ? "PAZ Y SALVO" : "DEUDA ACTIVA";
+function generarReciboPDF(args: {
+  cliente: Cliente | null;
+  prestamo: Prestamo | undefined;
+  monto: number;
+  fecha: string;
+  metodo: string;
+  nota: string;
+  mora: number;
+  saldoBase: number;
+  cuotasPendientes: number;
+  cuotasPagadas: number;
+  cuotaActual: number;
+  cuotasTotales: number;
+  montoPrestamo: number;
+  totalPrestamo: number;
+  frecuencia: string;
+}) {
+  const doc = new jsPDF();
 
- let y = 20;
+  const negocio = business?.negocio || "CREDI YA";
+  const estado = args.saldoBase <= 0 ? "PAZ Y SALVO" : "DEUDA ACTIVA";
 
- try {
- if (business?.logo_base64) {
- doc.addImage(business.logo_base64, "PNG", 20, 12, 32, 18);
- }
- } catch {}
+  let y = 20;
 
- doc.setFont("helvetica", "bold");
- doc.setFontSize(18);
- doc.text(negocio, 60, 20);
+  try {
+    if (business?.logo_base64) {
+      doc.addImage(business.logo_base64, "PNG", 20, 12, 32, 18);
+    }
+  } catch {}
 
- doc.setFont("helvetica", "normal");
- doc.setFontSize(11);
- doc.text("Recibo profesional de pago", 60, 28);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text(negocio, 60, 20);
 
- y = 42;
- doc.setDrawColor(200, 200, 200);
- doc.line(20, y, 190, y);
- y += 10;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.text("Recibo profesional de pago", 60, 28);
 
- const line = (label: string, value: string, bold = false) => {
- doc.setFont("helvetica", bold ? "bold" : "normal");
- doc.text(`${label}: ${value}`, 20, y);
- y += 8;
- };
+  y = 42;
 
- line("Cliente", args.cliente?.nombre || "Cliente", true);
- line("Documento", args.cliente?.documento || "No registrado");
- line("Teléfono", args.cliente?.telefono || "-");
- line("Fecha", args.fecha);
+  doc.setDrawColor(200, 200, 200);
+  doc.line(20, y, 190, y);
+  y += 10;
 
- y += 4;
- doc.line(20, y, 190, y);
- y += 10;
+  const line = (label: string, value: string, bold = false) => {
+    doc.setFont("helvetica", bold ? "bold" : "normal");
+    doc.text(`${label}: ${value}`, 20, y);
+    y += 8;
+  };
 
- doc.setFont("helvetica", "bold");
- doc.text("Detalle del préstamo", 20, y);
- y += 8;
+  line("Cliente", args.cliente?.nombre || "Cliente", true);
+  line("Documento", args.cliente?.documento || "No registrado");
+  line("Teléfono", args.cliente?.telefono || "-");
+  line("Fecha", args.fecha);
 
- line("Préstamo entregado", formatMoney(args.montoPrestamo));
- line("Total del préstamo", formatMoney(args.totalPrestamo));
- line("Frecuencia", args.frecuencia);
- line("Estado actual", estado, true);
-line("Pendiente del préstamo", formatMoney(args.saldo - args.mora), true);
-line("Mora aplicada", formatMoney(args.mora));
-line("Total pagado hoy", formatMoney(args.monto), true);
- y += 4;
- doc.line(20, y, 190, y);
- y += 10;
+  y += 4;
+  doc.line(20, y, 190, y);
+  y += 10;
 
- doc.setFont("helvetica", "bold");
- doc.text("Detalle de cuotas", 20, y);
- y += 8;
+  doc.setFont("helvetica", "bold");
+  doc.text("Detalle del préstamo", 20, y);
+  y += 8;
 
- line("Cuota pagada", `Cuota ${args.cuotaActual}`);
- line("Cuotas pagadas", String(args.cuotasPagadas));
- line("Cuotas pendientes", String(args.cuotasPendientes));
- line("Total cuotas", String(args.cuotasTotales));
+  line("Préstamo entregado", formatMoney(args.montoPrestamo));
+  line("Total del préstamo", formatMoney(args.totalPrestamo));
+  line("Frecuencia", args.frecuencia);
+  line("Estado actual", estado, true);
 
- y += 4;
- doc.line(20, y, 190, y);
- y += 10;
+  y += 4;
+  doc.line(20, y, 190, y);
+  y += 10;
 
- doc.setFont("helvetica", "bold");
- doc.text("Detalle del pago", 20, y);
- y += 8;
+  doc.setFont("helvetica", "bold");
+  doc.text("Detalle de cuotas", 20, y);
+  y += 8;
 
- line("Monto pagado", formatMoney(args.monto), true);
- line("Método", args.metodo);
- line("Nota", args.nota || "-");
+  line("Cuota pagada", `Cuota ${args.cuotaActual}`);
+  line("Cuotas pagadas", String(args.cuotasPagadas));
+  line("Cuotas pendientes", String(args.cuotasPendientes));
+  line("Total cuotas", String(args.cuotasTotales));
 
- y += 8;
- doc.setFont("helvetica", "italic");
- doc.setFontSize(10);
- doc.text(
- estado === "PAZ Y SALVO"
- ? "Comprobante generado: cliente al día y sin saldo pendiente."
- : "Comprobante generado: pago aplicado correctamente al préstamo.",
- 20,
- y
- );
+  y += 4;
+  doc.line(20, y, 190, y);
+  y += 10;
 
- doc.save(
- `recibo-${(args.cliente?.nombre || "cliente")
- .replace(/\s+/g, "-")
- .toLowerCase()}.pdf`
- );
- }
+  doc.setFont("helvetica", "bold");
+  doc.text("Detalle del pago", 20, y);
+  y += 8;
 
+  line("Pendiente del préstamo", formatMoney(args.saldoBase), true);
+  line("Mora aplicada hoy", formatMoney(args.mora));
+  line("Total pagado hoy", formatMoney(args.monto), true);
+  line("Método", args.metodo);
+  line("Nota", args.nota || "-");
+
+  y += 8;
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(10);
+  doc.text(
+    estado === "PAZ Y SALVO"
+      ? "Comprobante generado: cliente al día y sin saldo pendiente."
+      : "Comprobante generado: pago aplicado correctamente al préstamo.",
+    20,
+    y
+  );
+
+  doc.save(
+    `recibo-${(args.cliente?.nombre || "cliente")
+      .replace(/\s+/g, "-")
+      .toLowerCase()}.pdf`
+  );
+}
  async function recalcularPrestamo(prestamoId: string) {
  const { data, error } = await supabase
  .from("cuotas")
@@ -1087,6 +1089,7 @@ line("Total pagado hoy", formatMoney(args.monto), true);
  const cuotasPagadas = cuotasPrestamoActualizadas.filter(
  (c) => Number(c.restante || 0) <= 0
  ).length;
+ 
 
  generarReciboPDF({
  cliente,
@@ -1096,7 +1099,7 @@ line("Total pagado hoy", formatMoney(args.monto), true);
  metodo: pagoMetodo,
  nota: pagoNota,
  mora,
- saldo: saldoBase,
+ saldoBase,
  cuotasPendientes,
  cuotasPagadas,
  cuotaActual: Number(cuotaSeleccionada.numero || 0),
