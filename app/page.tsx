@@ -192,13 +192,18 @@ function redondearCuota(valor: number) {
   return Number((entero + 1).toFixed(2));
 }
 
-function calcularMora(fecha: string, restante: number, interesMoraDiario: number) {
- const saldo = Number(restante || 0);
- const interes = Number(interesMoraDiario || 0);
- if (!saldo || saldo <= 0 || !interes) return 0;
- const atraso = daysLate(fecha);
- if (atraso <= 0) return 0;
- return Number((saldo * interes * atraso).toFixed(2));
+function calcularMora(fecha: string, restante: number, cuotaMonto: number) {
+  const saldo = Number(restante || 0);
+  const cuota = Number(cuotaMonto || 0);
+
+  if (!saldo || saldo <= 0 || !cuota || cuota <= 0) return 0;
+
+  const atraso = daysLate(fecha);
+  if (atraso <= 0) return 0;
+
+  if (atraso <= 3) return Number((cuota / 2).toFixed(2));
+  if (atraso <= 7) return Number(cuota.toFixed(2));
+  return Number((cuota * 2).toFixed(2));
 }
 
 function addDays(dateISO: string, days: number) {
@@ -725,7 +730,22 @@ export default function App() {
 
  const total = Number((monto * (1 + interes)).toFixed(2));
  const cuotaBase = total / cuotasCount;
-const valorCuota = redondearCuota(cuotaBase);
+
+
+let cuotasCalculadas: number[] = [];
+let acumulado = 0;
+
+for (let i = 0; i < cuotasCount; i++) {
+  if (i === cuotasCount - 1) {
+    // última cuota ajustada
+    const ultima = Number((total - acumulado).toFixed(2));
+    cuotasCalculadas.push(ultima);
+  } else {
+    const cuotaRedondeada = redondearCuota(cuotaBase);
+    cuotasCalculadas.push(cuotaRedondeada);
+    acumulado += cuotaRedondeada;
+  }
+}
 
  const { data: prestamoCreado, error } = await supabase
  .from("prestamos")
@@ -738,7 +758,7 @@ const valorCuota = redondearCuota(cuotaBase);
  frecuencia,
  cuotas: cuotasCount,
  total,
- cuota: valorCuota,
+ cuota: cuotasCalculadas[0],
  saldo: total,
  estado: frecuencia === "DIARIO" ? "COBRAR HOY" : "ACTIVO",
  fecha_inicio: fechaInicio,
@@ -763,9 +783,9 @@ const valorCuota = redondearCuota(cuotaBase);
  prestamo_id: prestamoCreado.id,
  numero: i + 1,
  fecha,
- monto: valorCuota,
- pagado: 0,
- restante: valorCuota,
+ monto: cuotasCalculadas[i],
+pagado: 0,
+restante: cuotasCalculadas[i],
  estado: fecha < todayISO() ? "VENCIDA" : "PENDIENTE",
  };
  });
@@ -855,9 +875,9 @@ const valorCuota = redondearCuota(cuotaBase);
  line("Total del préstamo", formatMoney(args.totalPrestamo));
  line("Frecuencia", args.frecuencia);
  line("Estado actual", estado, true);
- line("Deuda activa", formatMoney(args.saldo), true);
- line("Mora acumulada", formatMoney(args.mora));
-
+line("Pendiente del préstamo", formatMoney(args.saldo - args.mora), true);
+line("Mora aplicada", formatMoney(args.mora));
+line("Total pagado hoy", formatMoney(args.monto), true);
  y += 4;
  doc.line(20, y, 190, y);
  y += 10;
@@ -921,15 +941,10 @@ const valorCuota = redondearCuota(cuotaBase);
  );
 
  const mora = cuotasPrestamo.reduce(
- (acc, c) =>
- acc +
- calcularMora(
- c.fecha,
- Number(c.restante || 0),
- Number(business?.interes_mora_diario || 0.01)
- ),
- 0
- );
+  (acc, c) =>
+    acc + calcularMora(c.fecha, Number(c.restante || 0), Number(c.monto || 0)),
+  0
+);
 
  const saldoReal = Number((saldoBase + mora).toFixed(2));
 
@@ -953,7 +968,7 @@ const valorCuota = redondearCuota(cuotaBase);
  const { error: updateError } = await supabase
  .from("prestamos")
  .update({
- saldo: saldoReal,
+ saldo: saldoBase,
  estado: estadoPrestamo,
  })
  .eq("id", prestamoId);
@@ -991,10 +1006,10 @@ const valorCuota = redondearCuota(cuotaBase);
  if (restanteActual <= 0) continue;
 
  const moraActual = calcularMora(
- cuota.fecha,
- restanteActual,
- Number(business?.interes_mora_diario || 0.01)
- );
+  cuota.fecha,
+  restanteActual,
+  Number(cuota.monto || 0)
+);
 
  const pagoMora = Math.min(restantePorAplicar, moraActual);
  restantePorAplicar = Number((restantePorAplicar - pagoMora).toFixed(2));
@@ -1059,11 +1074,7 @@ const valorCuota = redondearCuota(cuotaBase);
  const mora = cuotasPrestamoActualizadas.reduce(
  (acc, c) =>
  acc +
- calcularMora(
- c.fecha,
- Number(c.restante || 0),
- Number(business?.interes_mora_diario || 0.01)
- ),
+ calcularMora(c.fecha, Number(c.restante || 0), Number(c.monto || 0)),
  0
  );
 
@@ -1085,7 +1096,7 @@ const valorCuota = redondearCuota(cuotaBase);
  metodo: pagoMetodo,
  nota: pagoNota,
  mora,
- saldo: saldoReal,
+ saldo: saldoBase,
  cuotasPendientes,
  cuotasPagadas,
  cuotaActual: Number(cuotaSeleccionada.numero || 0),
@@ -1125,15 +1136,10 @@ const valorCuota = redondearCuota(cuotaBase);
  );
 
  const mora = cuotasLista.reduce(
- (acc, c) =>
- acc +
- calcularMora(
- c.fecha,
- Number(c.restante || 0),
- Number(business?.interes_mora_diario || 0.01)
- ),
- 0
- );
+  (acc, c) =>
+    acc + calcularMora(c.fecha, Number(c.restante || 0), Number(c.monto || 0)),
+  0
+);
 
  const saldoReal = Number((saldoBase + mora).toFixed(2));
 
@@ -1234,11 +1240,7 @@ const valorCuota = redondearCuota(cuotaBase);
  if (!cliente) return;
 
  const prev = map.get(cliente.id);
- const mora = calcularMora(
- cuota.fecha,
- Number(cuota.restante || 0),
- Number(business?.interes_mora_diario || 0.01)
- );
+ const mora = calcularMora(cuota.fecha, Number(cuota.restante || 0), Number(cuota.monto || 0));
  const dias = daysLate(cuota.fecha);
 
  if (!prev) {
@@ -1295,11 +1297,7 @@ const valorCuota = redondearCuota(cuotaBase);
  cuotas.reduce(
  (acc, c) =>
  acc +
- calcularMora(
- c.fecha,
- Number(c.restante || 0),
- Number(business?.interes_mora_diario || 0.01)
- ),
+ calcularMora(c.fecha, Number(c.restante || 0), Number(c.monto || 0)),
  0
  ),
  [cuotas, business?.interes_mora_diario]
@@ -1613,7 +1611,13 @@ const valorCuota = redondearCuota(cuotaBase);
  <div key={p.id} style={{ ...cardStyle(), display: "grid", gap: 6 }}>
  <span>Monto: {formatMoney(Number(p.monto || 0))}</span>
  <span>Cuota: {formatMoney(Number(p.cuota || 0))}</span>
- <span>Saldo real: {formatMoney(Number(p.saldoReal || 0))}</span>
+ <span>Pendiente: {formatMoney(Number(p.saldoBase || 0))}</span>
+<span style={{ color: DANGER }}>
+  Mora: {formatMoney(Number(p.mora || 0))}
+</span>
+<span style={{ fontWeight: 700 }}>
+  Total si paga hoy: {formatMoney(Number(p.saldoBase + p.mora || 0))}
+</span>
  <span style={badgeStyle(badgeColor(p.estadoReal))}>{p.estadoReal}</span>
  </div>
  ))
@@ -1872,11 +1876,7 @@ const valorCuota = redondearCuota(cuotaBase);
  <p style={{ margin: 0, color: MUTED }}>No hay cobros pendientes.</p>
  ) : (
  cobrosFiltrados.map(({ cuota, cliente }) => {
- const mora = calcularMora(
- cuota.fecha,
- Number(cuota.restante || 0),
- Number(business?.interes_mora_diario || 0.01)
- );
+const mora = calcularMora(cuota.fecha, Number(cuota.restante || 0), Number(cuota.monto || 0));
 
  const totalCobro = Number(cuota.restante || 0) + mora;
 
