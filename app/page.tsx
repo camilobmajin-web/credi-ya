@@ -135,7 +135,7 @@ function inputStyle(): CSSProperties {
  color: TEXT,
  };
 }
-
+<h1 style={{color: "red"}}>TEST NUEVO</h1>
 function buttonStyle(primary = false): CSSProperties {
  return {
  padding: "12px 16px",
@@ -1744,8 +1744,8 @@ function generarReciboPDF(args: {
  }}
  >
  <option value="20">20 días</option>
- <option value="25">25 días</option>
- <option value="30">30 días</option>
+<option value="25">25 días</option>
+<option value="30">30 días</option>
  </select>
  )}
 
