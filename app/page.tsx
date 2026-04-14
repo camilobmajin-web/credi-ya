@@ -728,7 +728,19 @@ export default function App() {
 
  if (!monto || !cuotasCount) return alert("Monto o cuotas inválidos");
 
- const total = Number((monto * (1 + interes)).toFixed(2));
+ let total = 0;
+
+if (frecuencia === "DIARIO") {
+  const mesesEquivalentes = cuotasCount / 20;
+  total = monto * (1 + interes * mesesEquivalentes);
+} else if (frecuencia === "SEMANAL") {
+  const mesesEquivalentes = cuotasCount / 4;
+  total = monto * (1 + interes * mesesEquivalentes);
+} else if (frecuencia === "MENSUAL") {
+  total = monto * (1 + interes * cuotasCount);
+}
+
+total = Number(total.toFixed(2));
  const cuotaBase = total / cuotasCount;
 
 
@@ -1732,7 +1744,7 @@ function generarReciboPDF(args: {
  }}
  >
  <option value="20">20 días</option>
- <option value="24">24 días</option>
+ <option value="25">25 días</option>
  <option value="30">30 días</option>
  </select>
  )}
